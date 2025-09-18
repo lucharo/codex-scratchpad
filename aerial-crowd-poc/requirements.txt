@@ -1,0 +1,9 @@
+gradio
+numpy
+opencv-python
+ultralytics
+pandas
+pyyaml
+matplotlib
+requests
+tqdm

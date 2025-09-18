@@ -1,0 +1,10 @@
+# Configure remote Hugging Face backends here.
+# Example entries demonstrate both Space and Inference Endpoint usage.
+hf_spaces:
+  space1:
+    url: "https://huggingface.co/spaces/ORG/SPACE/api/predict"
+    type: "json_base64"  # Sends {"image": "<base64>"}; expects JSON with count/points/density fields.
+  space2:
+    url: "https://api.endpoints.huggingface.cloud/v2/projects/PROJECT/deployments/DEPLOYMENT/predict"
+    type: "multipart"    # Uploads the image as multipart/form-data with key 'image'.
+    timeout: 60            # Optional custom timeout in seconds.
