@@ -1,0 +1,22 @@
+[project]
+name = "discord-marimo-issue-bot"
+version = "0.1.0"
+description = "Discord bot that turns support threads into actionable GitHub issues"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "discord-py>=2.6.3",
+    "httpx>=0.28.1",
+    "openai>=1.108.0",
+    "pydantic>=2.11.9",
+    "python-dotenv>=1.1.1",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.25.3",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
