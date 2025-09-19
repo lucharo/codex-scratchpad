@@ -5,9 +5,9 @@
 - initialise project with uv init
 - prefer marimo over jupyter notebooks
 - prefers polars over pandas
-- prefer altair or plotnine over matplotlib or seaborn
+- python viz libraries in order of preference: altair, plotnine, seaborn or matplotlib
 
 if doing front end/fulls stack work:
 - prefer next.js and svelte (5 if possible) over other similar tools
 
-- - broswe the internet and read the docs whener you're lost, best of luck! 
+- browse the internet and read the docs whener you're lost, best of luck! 
