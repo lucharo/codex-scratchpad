@@ -1,12 +1,8 @@
 FROM python:3.11-slim
 
 ENV UV_LINK_MODE=copy
-ENV PATH="/root/.cargo/bin:${PATH}"
 
-RUN apt-get update \ 
-    && apt-get install -y --no-install-recommends curl \ 
-    && rm -rf /var/lib/apt/lists/* \ 
-    && curl -LsSf https://astral.sh/uv/install.sh | sh
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
