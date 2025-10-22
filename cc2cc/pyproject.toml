@@ -1,0 +1,26 @@
+[project]
+name = "cc2cc"
+version = "0.1.0"
+description = "MCP server enabling Claude Code to create and manage other Claude Code sessions"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.3.5",
+    "pydantic>=2.11.9",
+    "asyncio>=3.4.3",
+]
+
+[project.scripts]
+cc2cc = "cc2cc.__main__:cli"
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.25.3",
+    "pytest-cov>=6.0.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src"]
