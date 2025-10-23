@@ -9,14 +9,22 @@ from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
 from .models import SessionConfig
+from .permissions import (
+    PermissionAction,
+    PermissionDecision,
+    PermissionManager,
+    PermissionRequest,
+    RiskLevel,
+)
 from .session import SessionManager, SessionError
 
 
 # Initialize the MCP server
 app = Server("cc2cc")
 
-# Global session manager (initialized on startup)
+# Global managers (initialized on startup)
 session_manager: SessionManager = None
+permission_manager: PermissionManager = None
 
 
 @app.list_tools()
@@ -141,6 +149,95 @@ async def list_tools() -> list[Tool]:
                 "required": ["session_id"],
             },
         ),
+        Tool(
+            name="request_permission",
+            description=(
+                "Request permission for an action from a sub-agent. "
+                "The main agent will auto-approve, auto-deny, or escalate to user based on policies."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "Session requesting permission",
+                    },
+                    "action": {
+                        "type": "string",
+                        "description": "Type of action (execute_command, read_file, write_file, etc.)",
+                        "enum": [a.value for a in PermissionAction],
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Human-readable description of what you want to do",
+                    },
+                    "details": {
+                        "type": "object",
+                        "description": "Action-specific details (e.g., command, file path)",
+                    },
+                },
+                "required": ["session_id", "action", "description"],
+            },
+        ),
+        Tool(
+            name="get_pending_permissions",
+            description="Get all pending permission requests that need user review.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "Optional: filter by session ID",
+                    },
+                },
+            },
+        ),
+        Tool(
+            name="approve_permission",
+            description="Approve a permission request.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "request_id": {
+                        "type": "string",
+                        "description": "Permission request ID to approve",
+                    },
+                },
+                "required": ["request_id"],
+            },
+        ),
+        Tool(
+            name="deny_permission",
+            description="Deny a permission request.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "request_id": {
+                        "type": "string",
+                        "description": "Permission request ID to deny",
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Reason for denial",
+                    },
+                },
+                "required": ["request_id"],
+            },
+        ),
+        Tool(
+            name="get_permission_status",
+            description="Get the status of a permission request.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "request_id": {
+                        "type": "string",
+                        "description": "Permission request ID",
+                    },
+                },
+                "required": ["request_id"],
+            },
+        ),
     ]
 
 
@@ -162,6 +259,16 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             return await _terminate_session(arguments)
         elif name == "cleanup_session":
             return await _cleanup_session(arguments)
+        elif name == "request_permission":
+            return await _request_permission(arguments)
+        elif name == "get_pending_permissions":
+            return await _get_pending_permissions(arguments)
+        elif name == "approve_permission":
+            return await _approve_permission(arguments)
+        elif name == "deny_permission":
+            return await _deny_permission(arguments)
+        elif name == "get_permission_status":
+            return await _get_permission_status(arguments)
         else:
             return [
                 TextContent(
@@ -320,17 +427,222 @@ async def _cleanup_session(arguments: dict) -> list[TextContent]:
     ]
 
 
+async def _request_permission(arguments: dict) -> list[TextContent]:
+    """Request permission for an action."""
+    import uuid
+
+    request_id = f"perm-{uuid.uuid4().hex[:12]}"
+    request = PermissionRequest(
+        request_id=request_id,
+        session_id=arguments["session_id"],
+        action=PermissionAction(arguments["action"]),
+        description=arguments["description"],
+        details=arguments.get("details", {}),
+    )
+
+    # Process through permission manager
+    request = permission_manager.request_permission(request)
+
+    # Build response based on decision
+    if request.decision == PermissionDecision.APPROVED:
+        return [
+            TextContent(
+                type="text",
+                text=f"✓ Permission APPROVED\n\n"
+                f"Request ID: {request.request_id}\n"
+                f"Action: {request.action}\n"
+                f"Description: {request.description}\n"
+                f"Decided by: {request.decided_by}\n\n"
+                f"You may proceed with this action.",
+            )
+        ]
+    elif request.decision == PermissionDecision.DENIED:
+        return [
+            TextContent(
+                type="text",
+                text=f"✗ Permission DENIED\n\n"
+                f"Request ID: {request.request_id}\n"
+                f"Action: {request.action}\n"
+                f"Description: {request.description}\n"
+                f"Reason: {request.denial_reason}\n"
+                f"Decided by: {request.decided_by}\n\n"
+                f"This action cannot be performed.",
+            )
+        ]
+    elif request.decision == PermissionDecision.ESCALATED:
+        return [
+            TextContent(
+                type="text",
+                text=f"⚠ Permission ESCALATED to user review\n\n"
+                f"Request ID: {request.request_id}\n"
+                f"Action: {request.action}\n"
+                f"Description: {request.description}\n"
+                f"Risk Level: {request.risk_level}\n\n"
+                f"This request requires user approval. The main agent will "
+                f"ask the user to review this action.\n\n"
+                f"Please wait for approval before proceeding.",
+            )
+        ]
+    else:  # PENDING
+        return [
+            TextContent(
+                type="text",
+                text=f"⏳ Permission PENDING review\n\n"
+                f"Request ID: {request.request_id}\n"
+                f"Action: {request.action}\n"
+                f"Description: {request.description}\n"
+                f"Risk Level: {request.risk_level}\n\n"
+                f"Please wait for a decision.",
+            )
+        ]
+
+
+async def _get_pending_permissions(arguments: dict) -> list[TextContent]:
+    """Get pending permission requests."""
+    session_id = arguments.get("session_id")
+    pending = permission_manager.get_pending_requests(session_id)
+
+    if not pending:
+        return [
+            TextContent(
+                type="text",
+                text="No pending permission requests.",
+            )
+        ]
+
+    lines = ["Pending Permission Requests:\n"]
+    for req in pending:
+        lines.append(
+            f"\n- Request ID: {req.request_id}\n"
+            f"  Session: {req.session_id}\n"
+            f"  Action: {req.action}\n"
+            f"  Description: {req.description}\n"
+            f"  Risk: {req.risk_level}\n"
+            f"  Status: {req.decision}\n"
+            f"  Created: {req.created_at.strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+
+    return [
+        TextContent(
+            type="text",
+            text="\n".join(lines),
+        )
+    ]
+
+
+async def _approve_permission(arguments: dict) -> list[TextContent]:
+    """Approve a permission request."""
+    request_id = arguments["request_id"]
+
+    try:
+        request = permission_manager.make_decision(
+            request_id,
+            PermissionDecision.APPROVED,
+            decided_by="user",
+        )
+
+        return [
+            TextContent(
+                type="text",
+                text=f"✓ Permission request {request_id} APPROVED\n\n"
+                f"Action: {request.action}\n"
+                f"Description: {request.description}\n\n"
+                f"The sub-agent may now proceed with this action.",
+            )
+        ]
+    except KeyError:
+        return [
+            TextContent(
+                type="text",
+                text=f"Error: Permission request {request_id} not found.",
+            )
+        ]
+
+
+async def _deny_permission(arguments: dict) -> list[TextContent]:
+    """Deny a permission request."""
+    request_id = arguments["request_id"]
+    reason = arguments.get("reason", "Denied by user")
+
+    try:
+        request = permission_manager.make_decision(
+            request_id,
+            PermissionDecision.DENIED,
+            decided_by="user",
+            reason=reason,
+        )
+
+        return [
+            TextContent(
+                type="text",
+                text=f"✗ Permission request {request_id} DENIED\n\n"
+                f"Action: {request.action}\n"
+                f"Description: {request.description}\n"
+                f"Reason: {reason}\n\n"
+                f"The sub-agent will be informed of the denial.",
+            )
+        ]
+    except KeyError:
+        return [
+            TextContent(
+                type="text",
+                text=f"Error: Permission request {request_id} not found.",
+            )
+        ]
+
+
+async def _get_permission_status(arguments: dict) -> list[TextContent]:
+    """Get the status of a permission request."""
+    request_id = arguments["request_id"]
+    request = permission_manager.get_request(request_id)
+
+    if not request:
+        return [
+            TextContent(
+                type="text",
+                text=f"Permission request {request_id} not found.",
+            )
+        ]
+
+    status_symbols = {
+        PermissionDecision.APPROVED: "✓",
+        PermissionDecision.DENIED: "✗",
+        PermissionDecision.PENDING: "⏳",
+        PermissionDecision.ESCALATED: "⚠",
+    }
+
+    symbol = status_symbols.get(request.decision, "?")
+
+    return [
+        TextContent(
+            type="text",
+            text=f"{symbol} Permission Request Status\n\n"
+            f"Request ID: {request.request_id}\n"
+            f"Session: {request.session_id}\n"
+            f"Action: {request.action}\n"
+            f"Description: {request.description}\n"
+            f"Risk Level: {request.risk_level}\n"
+            f"Status: {request.decision}\n"
+            f"Created: {request.created_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
+            f"Decided: {request.decided_at.strftime('%Y-%m-%d %H:%M:%S') if request.decided_at else 'N/A'}\n"
+            f"Decided by: {request.decided_by or 'N/A'}\n"
+            f"Denial reason: {request.denial_reason or 'N/A'}\n",
+        )
+    ]
+
+
 async def main(repo_root: Path | str = None):
     """Run the MCP server."""
-    global session_manager
+    global session_manager, permission_manager
 
-    # Initialize session manager
+    # Initialize managers
     if repo_root is None:
         repo_root = Path.cwd()
     else:
         repo_root = Path(repo_root)
 
     session_manager = SessionManager(repo_root)
+    permission_manager = PermissionManager()
 
     # Run the server
     async with stdio_server() as (read_stream, write_stream):

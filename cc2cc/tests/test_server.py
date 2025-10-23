@@ -96,9 +96,10 @@ async def test_list_tools():
     """Test listing available tools."""
     tools = await list_tools()
 
-    assert len(tools) == 7
+    assert len(tools) == 12
 
     tool_names = [tool.name for tool in tools]
+    # Session management tools
     assert "create_session" in tool_names
     assert "start_session" in tool_names
     assert "get_session" in tool_names
@@ -106,6 +107,12 @@ async def test_list_tools():
     assert "get_session_output" in tool_names
     assert "terminate_session" in tool_names
     assert "cleanup_session" in tool_names
+    # Permission management tools
+    assert "request_permission" in tool_names
+    assert "get_pending_permissions" in tool_names
+    assert "approve_permission" in tool_names
+    assert "deny_permission" in tool_names
+    assert "get_permission_status" in tool_names
 
 
 @pytest.mark.asyncio
