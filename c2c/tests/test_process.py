@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from cc2cc.process import ClaudeCodeProcess, ProcessError
+from c2c.process import ClaudeCodeProcess, ProcessError
 
 
 @pytest.fixture

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from cc2cc.worktree import WorktreeError, WorktreeManager
+from c2c.worktree import WorktreeError, WorktreeManager
 
 
 @pytest.fixture

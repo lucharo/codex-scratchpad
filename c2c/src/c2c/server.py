@@ -1,4 +1,4 @@
-"""MCP server implementation for cc2cc."""
+"""MCP server implementation for c2c."""
 
 import asyncio
 from pathlib import Path
@@ -20,7 +20,7 @@ from .session import SessionManager, SessionError
 
 
 # Initialize the MCP server
-app = Server("cc2cc")
+app = Server("c2c")
 
 # Global managers (initialized on startup)
 session_manager: SessionManager = None

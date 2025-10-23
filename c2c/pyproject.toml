@@ -1,5 +1,5 @@
 [project]
-name = "cc2cc"
+name = "c2c"
 version = "0.1.0"
 description = "MCP server enabling Claude Code to create and manage other Claude Code sessions"
 readme = "README.md"
@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [project.scripts]
-cc2cc = "cc2cc.__main__:cli"
+c2c = "c2c.__main__:cli"
 
 [tool.uv]
 dev-dependencies = [

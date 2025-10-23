@@ -2,7 +2,7 @@
 
 import pytest
 
-from cc2cc.permissions import (
+from c2c.permissions import (
     PermissionAction,
     PermissionDecision,
     PermissionManager,

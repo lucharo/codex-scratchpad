@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from cc2cc.server import (
+from c2c.server import (
     _cleanup_session,
     _create_session,
     _get_session,
@@ -83,8 +83,8 @@ def temp_git_repo():
 @pytest.fixture
 def setup_session_manager(temp_git_repo):
     """Set up the global session manager for tests."""
-    import cc2cc.server as server_module
-    from cc2cc.session import SessionManager
+    import c2c.server as server_module
+    from c2c.session import SessionManager
 
     server_module.session_manager = SessionManager(temp_git_repo)
     yield server_module.session_manager
@@ -198,7 +198,7 @@ async def test_get_session(setup_session_manager):
 @pytest.mark.asyncio
 async def test_get_session_not_found(setup_session_manager):
     """Test getting non-existent session."""
-    from cc2cc.session import SessionError
+    from c2c.session import SessionError
 
     with pytest.raises(SessionError, match="Session not found"):
         await _get_session({"session_id": "nonexistent-id"})
@@ -227,7 +227,7 @@ async def test_start_session_mock(setup_session_manager):
     mock_process.get_output = MagicMock(return_value=["output"])
 
     with patch(
-        "cc2cc.session.ClaudeCodeProcess",
+        "c2c.session.ClaudeCodeProcess",
         return_value=mock_process,
     ):
         result = await _start_session({"session_id": session_id})

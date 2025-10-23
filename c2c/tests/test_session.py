@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from cc2cc.models import SessionConfig, SessionStatus
-from cc2cc.session import SessionError, SessionManager
+from c2c.models import SessionConfig, SessionStatus
+from c2c.session import SessionError, SessionManager
 
 
 @pytest.fixture
@@ -98,7 +98,7 @@ def test_create_session(temp_git_repo):
 
     session = manager.create_session(config)
 
-    assert session.session_id.startswith("cc2cc-")
+    assert session.session_id.startswith("c2c-")
     assert session.config.task == "Test task"
     assert session.status == SessionStatus.CREATED
     assert session.branch_name.startswith("claude/")
@@ -173,7 +173,7 @@ async def test_start_session_mock(temp_git_repo):
     mock_process.get_output = MagicMock(return_value=["output line"])
 
     with patch(
-        "cc2cc.session.ClaudeCodeProcess",
+        "c2c.session.ClaudeCodeProcess",
         return_value=mock_process,
     ):
         await manager.start_session(session.session_id)

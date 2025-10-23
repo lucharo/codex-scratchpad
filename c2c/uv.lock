@@ -44,7 +44,7 @@ wheels = [
 ]
 
 [[package]]
-name = "cc2cc"
+name = "c2c"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

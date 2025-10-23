@@ -1,4 +1,4 @@
-"""Data models for cc2cc session management."""
+"""Data models for c2c session management."""
 
 from datetime import datetime
 from enum import Enum

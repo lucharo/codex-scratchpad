@@ -38,7 +38,7 @@ class SessionManager:
 
     def _generate_session_id(self) -> str:
         """Generate a unique session ID."""
-        return f"cc2cc-{uuid.uuid4().hex[:12]}"
+        return f"c2c-{uuid.uuid4().hex[:12]}"
 
     def _generate_branch_name(self, session_id: str, task: str) -> str:
         """Generate a branch name from session ID and task.

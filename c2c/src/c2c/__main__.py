@@ -1,4 +1,4 @@
-"""CLI entry point for cc2cc MCP server."""
+"""CLI entry point for c2c MCP server."""
 
 import argparse
 import asyncio
@@ -9,9 +9,9 @@ from .server import main
 
 
 def cli():
-    """Command-line interface for cc2cc."""
+    """Command-line interface for c2c."""
     parser = argparse.ArgumentParser(
-        description="cc2cc - Claude Code to Claude Code MCP Server"
+        description="c2c - Claude Code to Claude Code MCP Server"
     )
     parser.add_argument(
         "--repo-root",
