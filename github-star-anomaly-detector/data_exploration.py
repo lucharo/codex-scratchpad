@@ -16,8 +16,21 @@ def __():
     import polars as pl
     import altair as alt
     import numpy as np
-    from data_fetcher import GitHubStarFetcher, generate_synthetic_star_data, GitHubAPIError
-    return GitHubAPIError, GitHubStarFetcher, alt, generate_synthetic_star_data, mo, np, pl
+    from data_fetcher import (
+        GitHubStarFetcher,
+        generate_synthetic_star_data,
+        GitHubAPIError,
+    )
+
+    return (
+        GitHubAPIError,
+        GitHubStarFetcher,
+        alt,
+        generate_synthetic_star_data,
+        mo,
+        np,
+        pl,
+    )
 
 
 @app.cell
@@ -42,9 +55,7 @@ def __(mo):
 def __(mo):
     # Create a toggle to choose between real and synthetic data
     data_source = mo.ui.radio(
-        options=["synthetic", "real"],
-        value="synthetic",
-        label="Data Source"
+        options=["synthetic", "real"], value="synthetic", label="Data Source"
     )
     data_source
     return (data_source,)
@@ -54,24 +65,15 @@ def __(mo):
 def __(data_source, mo):
     # Show appropriate inputs based on data source
     if data_source.value == "real":
-        owner_input = mo.ui.text(
-            value="marimo-team",
-            label="Repository owner"
-        )
-        repo_input = mo.ui.text(
-            value="marimo",
-            label="Repository name"
-        )
+        owner_input = mo.ui.text(value="marimo-team", label="Repository owner")
+        repo_input = mo.ui.text(value="marimo", label="Repository name")
         token_input = mo.ui.text(
             value="",
             label="GitHub token (optional, for higher rate limits)",
-            kind="password"
+            kind="password",
         )
         max_pages_input = mo.ui.slider(
-            start=1,
-            stop=20,
-            value=5,
-            label="Max pages to fetch (100 stars per page)"
+            start=1, stop=20, value=5, label="Max pages to fetch (100 stars per page)"
         )
 
         mo.md(f"""
@@ -114,18 +116,20 @@ def __(
             anomaly_days=[50, 150, 250, 320],
             anomaly_multiplier=5.0,
             growth_pattern="exponential",
-            add_seasonality=True
+            add_seasonality=True,
         )
         data_info = "Synthetic data generated with 4 anomalies injected"
         error_msg = None
     else:
         # Fetch real data from GitHub
         try:
-            fetcher = GitHubStarFetcher(token=token_input.value if token_input.value else None)
+            fetcher = GitHubStarFetcher(
+                token=token_input.value if token_input.value else None
+            )
             stars_raw = fetcher.fetch_stars(
                 owner=owner_input.value,
                 repo=repo_input.value,
-                max_pages=max_pages_input.value
+                max_pages=max_pages_input.value,
             )
 
             if len(stars_raw) == 0:
@@ -160,9 +164,9 @@ def __(mo, star_df):
         ## Data Summary
 
         - **Total Days:** {len(star_df)}
-        - **Total Stars:** {star_df['cumulative_stars'][-1]:.0f}
-        - **Average Stars per Day:** {star_df['new_stars'].mean():.2f}
-        - **Max Stars in a Day:** {star_df['new_stars'].max():.0f}
+        - **Total Stars:** {star_df["cumulative_stars"][-1]:.0f}
+        - **Average Stars per Day:** {star_df["new_stars"].mean():.2f}
+        - **Max Stars in a Day:** {star_df["new_stars"].max():.0f}
         """)
     return
 
@@ -178,15 +182,17 @@ def __(mo, star_df):
 def __(alt, mo, star_df):
     if star_df is not None and len(star_df) > 0:
         # Visualize cumulative stars
-        chart1 = alt.Chart(star_df.to_pandas()).mark_line().encode(
-            x=alt.X('date:T', title='Date'),
-            y=alt.Y('cumulative_stars:Q', title='Cumulative Stars'),
-            tooltip=['date:T', 'cumulative_stars:Q', 'new_stars:Q']
-        ).properties(
-            width=700,
-            height=300,
-            title='Cumulative Stars Over Time'
-        ).interactive()
+        chart1 = (
+            alt.Chart(star_df.to_pandas())
+            .mark_line()
+            .encode(
+                x=alt.X("date:T", title="Date"),
+                y=alt.Y("cumulative_stars:Q", title="Cumulative Stars"),
+                tooltip=["date:T", "cumulative_stars:Q", "new_stars:Q"],
+            )
+            .properties(width=700, height=300, title="Cumulative Stars Over Time")
+            .interactive()
+        )
 
         mo.ui.altair_chart(chart1)
     return (chart1,)
@@ -196,31 +202,33 @@ def __(alt, mo, star_df):
 def __(alt, mo, star_df):
     if star_df is not None and len(star_df) > 0:
         # Visualize daily new stars
-        chart2 = alt.Chart(star_df.to_pandas()).mark_bar().encode(
-            x=alt.X('date:T', title='Date'),
-            y=alt.Y('new_stars:Q', title='New Stars per Day'),
-            tooltip=['date:T', 'new_stars:Q']
-        ).properties(
-            width=700,
-            height=300,
-            title='Daily New Stars'
-        ).interactive()
+        chart2 = (
+            alt.Chart(star_df.to_pandas())
+            .mark_bar()
+            .encode(
+                x=alt.X("date:T", title="Date"),
+                y=alt.Y("new_stars:Q", title="New Stars per Day"),
+                tooltip=["date:T", "new_stars:Q"],
+            )
+            .properties(width=700, height=300, title="Daily New Stars")
+            .interactive()
+        )
 
         mo.ui.altair_chart(chart2)
     return (chart2,)
 
 
 @app.cell
-def __(mo, np, star_df):
+def __(mo, np, pl, star_df):
     if star_df is not None and len(star_df) > 0:
         # Calculate basic statistics
-        new_stars = star_df['new_stars'].to_numpy()
+        new_stars = star_df["new_stars"].to_numpy()
         mean_stars = np.mean(new_stars)
         std_stars = np.std(new_stars)
 
         # Simple threshold-based anomaly detection (for exploration)
         threshold = mean_stars + 2 * std_stars
-        potential_anomalies = star_df.filter(pl.col('new_stars') > threshold)
+        potential_anomalies = star_df.filter(pl.col("new_stars") > threshold)
 
         mo.md(f"""
         ## Simple Statistical Analysis
