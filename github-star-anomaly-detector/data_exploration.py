@@ -16,8 +16,8 @@ def __():
     import polars as pl
     import altair as alt
     import numpy as np
-    from data_fetcher import GitHubStarFetcher, generate_synthetic_star_data
-    return GitHubStarFetcher, alt, generate_synthetic_star_data, mo, np, pl
+    from data_fetcher import GitHubStarFetcher, generate_synthetic_star_data, GitHubAPIError
+    return GitHubAPIError, GitHubStarFetcher, alt, generate_synthetic_star_data, mo, np, pl
 
 
 @app.cell
@@ -30,9 +30,9 @@ def __(mo):
 
         ## Data Sources
 
-        We can either:
-        1. Fetch real data from GitHub API (requires API token for large repos)
-        2. Use synthetic data for testing anomaly detection algorithms
+        Choose between:
+        1. **Synthetic data**: Generated data with configurable patterns and anomalies
+        2. **Real GitHub data**: Fetch actual star history from a GitHub repository
         """
     )
     return
@@ -51,7 +51,60 @@ def __(mo):
 
 
 @app.cell
-def __(generate_synthetic_star_data, data_source):
+def __(data_source, mo):
+    # Show appropriate inputs based on data source
+    if data_source.value == "real":
+        owner_input = mo.ui.text(
+            value="marimo-team",
+            label="Repository owner"
+        )
+        repo_input = mo.ui.text(
+            value="marimo",
+            label="Repository name"
+        )
+        token_input = mo.ui.text(
+            value="",
+            label="GitHub token (optional, for higher rate limits)",
+            kind="password"
+        )
+        max_pages_input = mo.ui.slider(
+            start=1,
+            stop=20,
+            value=5,
+            label="Max pages to fetch (100 stars per page)"
+        )
+
+        mo.md(f"""
+        ## Real Data Configuration
+
+        {owner_input}
+
+        {repo_input}
+
+        {token_input}
+
+        {max_pages_input}
+        """)
+    else:
+        owner_input = None
+        repo_input = None
+        token_input = None
+        max_pages_input = None
+        mo.md("Using synthetic data")
+    return max_pages_input, owner_input, repo_input, token_input
+
+
+@app.cell
+def __(
+    GitHubAPIError,
+    GitHubStarFetcher,
+    data_source,
+    generate_synthetic_star_data,
+    max_pages_input,
+    owner_input,
+    repo_input,
+    token_input,
+):
     # Generate or fetch data based on selection
     if data_source.value == "synthetic":
         # Generate synthetic data with anomalies
@@ -59,26 +112,50 @@ def __(generate_synthetic_star_data, data_source):
             n_days=365,
             base_rate=10.0,
             anomaly_days=[50, 150, 250, 320],
-            anomaly_multiplier=5.0
+            anomaly_multiplier=5.0,
+            growth_pattern="exponential",
+            add_seasonality=True
         )
         data_info = "Synthetic data generated with 4 anomalies injected"
+        error_msg = None
     else:
-        # For real data, we'll create a placeholder
-        # Users can modify this to fetch from their desired repo
-        star_df = None
-        data_info = "Real data fetching not implemented yet. Please use synthetic data or modify the notebook."
-    return data_info, star_df
+        # Fetch real data from GitHub
+        try:
+            fetcher = GitHubStarFetcher(token=token_input.value if token_input.value else None)
+            stars_raw = fetcher.fetch_stars(
+                owner=owner_input.value,
+                repo=repo_input.value,
+                max_pages=max_pages_input.value
+            )
+
+            if len(stars_raw) == 0:
+                star_df = None
+                data_info = "No stars found for this repository"
+                error_msg = None
+            else:
+                # Convert to time series
+                star_df = fetcher.create_time_series(stars_raw, freq="1d")
+                data_info = f"Fetched {len(stars_raw)} stars from {owner_input.value}/{repo_input.value}"
+                error_msg = None
+        except GitHubAPIError as e:
+            star_df = None
+            data_info = "Failed to fetch data"
+            error_msg = str(e)
+    return data_info, error_msg, fetcher, star_df, stars_raw
 
 
 @app.cell
-def __(data_info, mo):
-    mo.md(f"**Data Info:** {data_info}")
+def __(data_info, error_msg, mo):
+    if error_msg:
+        mo.md(f"**Data Info:** {data_info}\n\n❌ **Error:** {error_msg}")
+    else:
+        mo.md(f"**Data Info:** {data_info}")
     return
 
 
 @app.cell
 def __(mo, star_df):
-    if star_df is not None:
+    if star_df is not None and len(star_df) > 0:
         mo.md(f"""
         ## Data Summary
 
@@ -92,14 +169,14 @@ def __(mo, star_df):
 
 @app.cell
 def __(mo, star_df):
-    if star_df is not None:
+    if star_df is not None and len(star_df) > 0:
         mo.ui.table(star_df.head(10))
     return
 
 
 @app.cell
 def __(alt, mo, star_df):
-    if star_df is not None:
+    if star_df is not None and len(star_df) > 0:
         # Visualize cumulative stars
         chart1 = alt.Chart(star_df.to_pandas()).mark_line().encode(
             x=alt.X('date:T', title='Date'),
@@ -117,7 +194,7 @@ def __(alt, mo, star_df):
 
 @app.cell
 def __(alt, mo, star_df):
-    if star_df is not None:
+    if star_df is not None and len(star_df) > 0:
         # Visualize daily new stars
         chart2 = alt.Chart(star_df.to_pandas()).mark_bar().encode(
             x=alt.X('date:T', title='Date'),
@@ -135,7 +212,7 @@ def __(alt, mo, star_df):
 
 @app.cell
 def __(mo, np, star_df):
-    if star_df is not None:
+    if star_df is not None and len(star_df) > 0:
         # Calculate basic statistics
         new_stars = star_df['new_stars'].to_numpy()
         mean_stars = np.mean(new_stars)

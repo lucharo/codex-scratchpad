@@ -16,21 +16,9 @@ def __():
     import marimo as mo
     import polars as pl
     import altair as alt
-    import numpy as np
     from data_fetcher import generate_synthetic_star_data
-    from sklearn.ensemble import IsolationForest
-    from scipy import stats
-    from scipy.signal import find_peaks
-    return (
-        IsolationForest,
-        alt,
-        find_peaks,
-        generate_synthetic_star_data,
-        mo,
-        np,
-        pl,
-        stats,
-    )
+    from anomaly_methods import get_detector, DetectionConfig, DETECTORS
+    return DETECTORS, DetectionConfig, alt, generate_synthetic_star_data, get_detector, mo, pl
 
 
 @app.cell
@@ -44,18 +32,19 @@ def __(mo):
 
         ## Anomaly Detection Methods
 
-        1. **Statistical (Z-Score)**: Detects values that deviate significantly from the mean
+        1. **Z-Score**: Detects values that deviate significantly from the mean
         2. **Moving Average**: Identifies points that deviate from a rolling average
-        3. **Isolation Forest**: ML-based anomaly detection
-        4. **Rate of Change**: Detects sudden spikes or drops in the rate of stars
+        3. **Rate of Change**: Detects sudden spikes or drops in the rate of stars
+        4. **Isolation Forest**: ML-based anomaly detection
+        5. **Ensemble**: Combines all methods with voting for robust detection
         """
     )
     return
 
 
 @app.cell
-def __(generate_synthetic_star_data, mo):
-    # Configuration
+def __(mo):
+    # Data configuration
     n_days_slider = mo.ui.slider(
         start=100,
         stop=500,
@@ -77,6 +66,12 @@ def __(generate_synthetic_star_data, mo):
         label="Anomaly multiplier"
     )
 
+    growth_pattern = mo.ui.dropdown(
+        options=["linear", "exponential", "logarithmic", "viral"],
+        value="linear",
+        label="Growth pattern"
+    )
+
     mo.md(f"""
     ## Data Configuration
 
@@ -85,8 +80,10 @@ def __(generate_synthetic_star_data, mo):
     {base_rate_slider}
 
     {anomaly_mult_slider}
+
+    {growth_pattern}
     """)
-    return anomaly_mult_slider, base_rate_slider, n_days_slider
+    return anomaly_mult_slider, base_rate_slider, growth_pattern, n_days_slider
 
 
 @app.cell
@@ -94,6 +91,7 @@ def __(
     anomaly_mult_slider,
     base_rate_slider,
     generate_synthetic_star_data,
+    growth_pattern,
     n_days_slider,
 ):
     # Generate synthetic data
@@ -101,86 +99,19 @@ def __(
         n_days=n_days_slider.value,
         base_rate=float(base_rate_slider.value),
         anomaly_days=[50, 150, 250, 320],
-        anomaly_multiplier=float(anomaly_mult_slider.value)
+        anomaly_multiplier=float(anomaly_mult_slider.value),
+        growth_pattern=growth_pattern.value,
+        add_seasonality=True
     )
     return (star_df,)
 
 
 @app.cell
-def __(mo, np, pl, star_df, stats):
-    # Method 1: Z-Score based anomaly detection
-    def detect_anomalies_zscore(df: pl.DataFrame, threshold: float = 2.5) -> pl.DataFrame:
-        """Detect anomalies using Z-score."""
-        new_stars = df['new_stars'].to_numpy()
-        z_scores = np.abs(stats.zscore(new_stars))
-
-        return df.with_columns([
-            pl.Series("z_score", z_scores),
-            pl.Series("is_anomaly_zscore", z_scores > threshold)
-        ])
-
-    # Method 2: Moving Average based anomaly detection
-    def detect_anomalies_moving_avg(
-        df: pl.DataFrame,
-        window: int = 7,
-        threshold: float = 2.0
-    ) -> pl.DataFrame:
-        """Detect anomalies using moving average and standard deviation."""
-        result = df.with_columns([
-            pl.col('new_stars').rolling_mean(window_size=window).alias('moving_avg'),
-            pl.col('new_stars').rolling_std(window_size=window).alias('moving_std')
-        ])
-
-        # Calculate deviation from moving average
-        result = result.with_columns([
-            ((pl.col('new_stars') - pl.col('moving_avg')) / pl.col('moving_std')).alias('ma_deviation')
-        ])
-
-        # Mark anomalies
-        result = result.with_columns([
-            (pl.col('ma_deviation').abs() > threshold).alias('is_anomaly_ma')
-        ])
-
-        return result
-
-    # Method 3: Rate of Change based anomaly detection
-    def detect_anomalies_rate_change(df: pl.DataFrame, threshold: float = 3.0) -> pl.DataFrame:
-        """Detect anomalies based on rate of change."""
-        result = df.with_columns([
-            pl.col('new_stars').diff().alias('rate_change')
-        ])
-
-        # Calculate z-score of rate changes
-        rate_changes = result['rate_change'].fill_null(0).to_numpy()
-        rate_z_scores = np.abs(stats.zscore(rate_changes))
-
-        result = result.with_columns([
-            pl.Series("rate_z_score", rate_z_scores),
-            pl.Series("is_anomaly_rate", rate_z_scores > threshold)
-        ])
-
-        return result
-
-    mo.md("### Anomaly Detection Methods Defined")
-    return (
-        detect_anomalies_moving_avg,
-        detect_anomalies_rate_change,
-        detect_anomalies_zscore,
-    )
-
-
-@app.cell
-def __(mo):
+def __(DETECTORS, mo):
     # Select detection method
     method_selector = mo.ui.dropdown(
-        options={
-            "zscore": "Z-Score",
-            "moving_avg": "Moving Average",
-            "rate_change": "Rate of Change",
-            "isolation_forest": "Isolation Forest",
-            "combined": "Combined (All Methods)"
-        },
-        value="combined",
+        options={k: v().__class__.__name__.replace('Detector', '') for k, v in DETECTORS.items()},
+        value="ensemble",
         label="Detection Method"
     )
 
@@ -193,74 +124,22 @@ def __(mo):
 
 
 @app.cell
-def __(
-    IsolationForest,
-    detect_anomalies_moving_avg,
-    detect_anomalies_rate_change,
-    detect_anomalies_zscore,
-    method_selector,
-    np,
-    pl,
-    star_df,
-):
-    # Apply selected method
-    if method_selector.value == "zscore":
-        result_df = detect_anomalies_zscore(star_df)
-        anomaly_col = 'is_anomaly_zscore'
-    elif method_selector.value == "moving_avg":
-        result_df = detect_anomalies_moving_avg(star_df)
-        anomaly_col = 'is_anomaly_ma'
-    elif method_selector.value == "rate_change":
-        result_df = detect_anomalies_rate_change(star_df)
-        anomaly_col = 'is_anomaly_rate'
-    elif method_selector.value == "isolation_forest":
-        # Isolation Forest
-        features = star_df.select(['new_stars']).to_numpy()
-        iso_forest = IsolationForest(contamination=0.05, random_state=42)
-        predictions = iso_forest.fit_predict(features)
-        result_df = star_df.with_columns([
-            pl.Series("is_anomaly_iso", predictions == -1)
-        ])
-        anomaly_col = 'is_anomaly_iso'
-    else:  # combined
-        # Apply all methods
-        result_df = detect_anomalies_zscore(star_df)
-        result_df = detect_anomalies_moving_avg(result_df)
-        result_df = detect_anomalies_rate_change(result_df)
-
-        # Isolation Forest
-        features = result_df.select(['new_stars']).to_numpy()
-        iso_forest = IsolationForest(contamination=0.05, random_state=42)
-        predictions = iso_forest.fit_predict(features)
-        result_df = result_df.with_columns([
-            pl.Series("is_anomaly_iso", predictions == -1)
-        ])
-
-        # Combined: anomaly if detected by at least 2 methods
-        result_df = result_df.with_columns([
-            (
-                pl.col('is_anomaly_zscore').cast(pl.Int32) +
-                pl.col('is_anomaly_ma').cast(pl.Int32) +
-                pl.col('is_anomaly_rate').cast(pl.Int32) +
-                pl.col('is_anomaly_iso').cast(pl.Int32)
-            ).alias('anomaly_count'),
-        ])
-
-        result_df = result_df.with_columns([
-            (pl.col('anomaly_count') >= 2).alias('is_anomaly_combined')
-        ])
-
-        anomaly_col = 'is_anomaly_combined'
-
-    # Get anomaly subset
-    anomalies = result_df.filter(pl.col(anomaly_col) == True)
-    return anomalies, anomaly_col, features, iso_forest, predictions, result_df
+def __(get_detector, method_selector, star_df):
+    # Apply selected detection method (this is now just 3 lines!)
+    detector = get_detector(method_selector.value)
+    result_df = detector.detect(star_df)
+    anomalies = result_df.filter(pl.col('is_anomaly') == True)
+    return anomalies, detector, result_df
 
 
 @app.cell
-def __(anomalies, mo, result_df):
+def __(anomalies, detector, mo, result_df):
     mo.md(f"""
     ## Results
+
+    **Method:** {detector.name}
+
+    **Description:** {detector.description}
 
     - **Total Days:** {len(result_df)}
     - **Anomalies Detected:** {len(anomalies)}
@@ -290,7 +169,7 @@ def __(alt, anomalies, mo, result_df):
     ).encode(
         x='date:T',
         y='new_stars:Q',
-        tooltip=['date:T', 'new_stars:Q']
+        tooltip=['date:T', 'new_stars:Q', 'confidence:Q']
     )
 
     combined_chart = (base_chart + anomaly_chart).interactive()
@@ -329,27 +208,33 @@ def __(alt, mo, result_df):
 def __(anomalies, mo):
     mo.md("### Detected Anomalies")
     if len(anomalies) > 0:
-        mo.ui.table(anomalies.select(['date', 'new_stars', 'cumulative_stars']))
+        display_cols = ['date', 'new_stars', 'cumulative_stars', 'confidence']
+        # Only show columns that exist
+        available_cols = [c for c in display_cols if c in anomalies.columns]
+        mo.ui.table(anomalies.select(available_cols))
     else:
         mo.md("*No anomalies detected with current settings.*")
-    return
+    return available_cols, display_cols
 
 
 @app.cell
 def __(method_selector, mo, result_df):
-    if method_selector.value == "combined":
+    if method_selector.value == "ensemble":
         mo.md("### Method Comparison")
-        comparison = result_df.select([
+        comparison_cols = [
             'date',
             'new_stars',
             'is_anomaly_zscore',
-            'is_anomaly_ma',
-            'is_anomaly_rate',
-            'is_anomaly_iso',
-            'anomaly_count'
-        ])
-        mo.ui.table(comparison.head(20))
-    return (comparison,)
+            'is_anomaly_movingaverage',
+            'is_anomaly_ratechange',
+            'is_anomaly_isolationforest',
+            'vote_count',
+            'confidence'
+        ]
+        # Only show columns that exist
+        available_comparison_cols = [c for c in comparison_cols if c in result_df.columns]
+        mo.ui.table(result_df.select(available_comparison_cols).head(20))
+    return available_comparison_cols, comparison_cols
 
 
 @app.cell
@@ -359,11 +244,12 @@ def __(mo):
         ## Interpretation
 
         - **Red circles** indicate detected anomalies
+        - **Confidence** shows how certain the detector is (0.0 - 1.0)
         - **Z-Score**: Good for detecting outliers in normally distributed data
         - **Moving Average**: Captures deviations from recent trends
         - **Rate of Change**: Detects sudden spikes or drops
         - **Isolation Forest**: ML-based, good for complex patterns
-        - **Combined**: More robust, reduces false positives
+        - **Ensemble**: More robust, reduces false positives by requiring multiple methods to agree
         """
     )
     return
