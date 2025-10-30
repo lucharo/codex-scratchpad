@@ -1,6 +1,63 @@
-# GitHub Star Anomaly Detector
+# Fake Stars Detector
 
-A tool for detecting anomalous patterns in GitHub repository star growth using multiple anomaly detection algorithms with a clean, modular architecture.
+A full-stack application for detecting potentially fake GitHub stars using time-series anomaly detection combined with account verification. Visit `fakestars.com/owner/repo` to analyze any GitHub repository.
+
+## 🚀 Full-Stack Application
+
+**Vision:** Visit `/pytorch/pytorch` and instantly see:
+- Anomalous regions in star growth
+- Account verification for suspicious periods
+- Real-time fake star percentage estimate
+- Beautiful, minimal UI
+
+### Quick Start
+
+```bash
+# Terminal 1: Start backend
+cd github-star-anomaly-detector
+uv run uvicorn api.main:app --reload
+
+# Terminal 2: Start frontend
+cd web
+npm install
+npm run dev
+
+# Visit http://localhost:3000
+```
+
+## Architecture
+
+### Two-Layer Detection System
+
+**Layer 1: Region Anomaly Detection**
+- Detects anomalous REGIONS in star growth rate (not just individual points)
+- Uses ensemble of 4 algorithms (Z-Score, Moving Average, Rate Change, Isolation Forest)
+- Identifies continuous time periods with suspicious growth patterns
+
+**Layer 2: Account Verification**
+- Async verification of accounts that starred during anomalous periods
+- Checks for bot-like characteristics:
+  - Account age (<90 days)
+  - No repositories or activity
+  - Generic profile (no name, bio, company)
+  - Zero followers (isolated account)
+- Returns confidence score and fake percentage estimate
+
+### Components
+
+**Backend (FastAPI + Python)**
+- `api/main.py` - FastAPI server with `/analyze/{owner}/{repo}` endpoint
+- `account_verifier.py` - Async account verification with parallel checks
+- `region_detector.py` - Identifies continuous anomalous regions
+- `data_fetcher.py` - GitHub API integration
+- `anomaly_methods.py` - 5 detection algorithms with unified interface
+
+**Frontend (Next.js 15 + Tailwind)**
+- `web/` - Minimal, elegant UI
+- Home page with search
+- Dynamic route `/[owner]/[repo]` for analysis results
+- Real-time loading states
+- Responsive cards showing regions and fake star estimates
 
 ## Features
 
@@ -11,6 +68,8 @@ A tool for detecting anomalous patterns in GitHub repository star growth using m
   - Isolation Forest (ML-based)
   - Ensemble method using voting across all algorithms
 
+- **Account Verification**: Async verification of GitHub accounts for bot-like characteristics
+- **Region Detection**: Identifies continuous anomalous time periods, not just individual points
 - **Interactive Marimo Notebooks**: Built with reactive cells and Altair visualizations
 - **Realistic Synthetic Data**: Generate data with multiple growth patterns (linear, exponential, logarithmic, viral) and seasonality
 - **Real GitHub Data**: Fetch actual repository star history via GitHub API with proper error handling
