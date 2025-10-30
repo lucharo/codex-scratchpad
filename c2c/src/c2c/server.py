@@ -1,6 +1,7 @@
 """MCP server implementation for c2c."""
 
 import asyncio
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -362,8 +363,9 @@ async def _list_sessions(arguments: dict) -> list[TextContent]:
 
     lines = ["Sessions:\n"]
     for s in sessions:
+        task_preview = s.task if len(s.task) <= 50 else f"{s.task[:50]}..."
         lines.append(
-            f"- {s.session_id}: {s.task[:50]}... ({s.status})"
+            f"- {s.session_id}: {task_preview} ({s.status})"
         )
 
     return [
@@ -429,8 +431,6 @@ async def _cleanup_session(arguments: dict) -> list[TextContent]:
 
 async def _request_permission(arguments: dict) -> list[TextContent]:
     """Request permission for an action."""
-    import uuid
-
     request_id = f"perm-{uuid.uuid4().hex[:12]}"
     request = PermissionRequest(
         request_id=request_id,

@@ -1,6 +1,7 @@
 """Process management for Claude Code instances."""
 
 import asyncio
+import os
 import shutil
 import signal
 from pathlib import Path
@@ -43,6 +44,11 @@ class ClaudeCodeProcess:
 
         Raises:
             ProcessError: If the process fails to start
+
+        Note:
+            This assumes Claude Code supports `claude --task "..." --non-interactive`.
+            If the actual CLI interface differs, this will need adjustment.
+            For integration testing, verify the correct Claude Code CLI syntax.
         """
         # Find claude executable
         claude_path = shutil.which("claude")
@@ -52,8 +58,8 @@ class ClaudeCodeProcess:
                 "Please ensure 'claude' is installed and in PATH."
             )
 
-        # Prepare environment
-        env = {**self.env_vars}
+        # Prepare environment - merge with parent environment
+        env = {**os.environ, **self.env_vars}
 
         try:
             # Start Claude Code with the task

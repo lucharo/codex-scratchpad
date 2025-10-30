@@ -13,7 +13,6 @@ class SessionStatus(str, Enum):
 
     CREATED = "created"
     RUNNING = "running"
-    PAUSED = "paused"
     COMPLETED = "completed"
     FAILED = "failed"
     TERMINATED = "terminated"
