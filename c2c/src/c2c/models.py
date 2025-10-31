@@ -34,6 +34,14 @@ class SessionConfig(BaseModel):
     env_vars: dict[str, str] = Field(
         default_factory=dict, description="Environment variables for the session"
     )
+    tags: dict[str, str] = Field(
+        default_factory=dict,
+        description="Tags for organizing and filtering sessions (e.g., feature, role, strategy)",
+    )
+    metadata: dict[str, str] = Field(
+        default_factory=dict,
+        description="Additional metadata for custom use cases",
+    )
 
 
 class Session(BaseModel):
@@ -67,6 +75,17 @@ class Session(BaseModel):
     )
     output: list[str] = Field(
         default_factory=list, description="Session output logs"
+    )
+
+    # Hierarchy tracking
+    parent_session_id: Optional[str] = Field(
+        None, description="Parent session ID if this is a sub-session"
+    )
+    child_session_ids: list[str] = Field(
+        default_factory=list, description="List of child session IDs spawned by this session"
+    )
+    depth: int = Field(
+        default=0, description="Depth in the session hierarchy (0 = root)"
     )
 
     model_config = ConfigDict(

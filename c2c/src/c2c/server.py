@@ -36,7 +36,8 @@ async def list_tools() -> list[Tool]:
             name="create_session",
             description=(
                 "Create a new Claude Code session. The session will be created "
-                "in an isolated git worktree with its own branch."
+                "in an isolated git worktree with its own branch. "
+                "Supports hierarchical organization with parent-child relationships and tags."
             ),
             inputSchema={
                 "type": "object",
@@ -57,6 +58,18 @@ async def list_tools() -> list[Tool]:
                     "timeout": {
                         "type": "integer",
                         "description": "Optional timeout in seconds",
+                    },
+                    "parent_session_id": {
+                        "type": "string",
+                        "description": "Optional parent session ID for hierarchical organization",
+                    },
+                    "tags": {
+                        "type": "object",
+                        "description": "Tags for organizing sessions (e.g., {feature: 'AddAuth', role: 'reviewer', strategy: 'OptionA'})",
+                    },
+                    "metadata": {
+                        "type": "object",
+                        "description": "Additional metadata for custom use cases",
                     },
                 },
                 "required": ["task"],
@@ -239,6 +252,34 @@ async def list_tools() -> list[Tool]:
                 "required": ["request_id"],
             },
         ),
+        Tool(
+            name="get_session_tree",
+            description="Get the hierarchical tree of sessions starting from a root session.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "Root session ID to start the tree from",
+                    },
+                },
+                "required": ["session_id"],
+            },
+        ),
+        Tool(
+            name="get_sessions_by_tags",
+            description="Find sessions matching specific tags (useful for finding all sessions for a feature, role, or strategy).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "tags": {
+                        "type": "object",
+                        "description": "Tag key-value pairs to match (e.g., {feature: 'AddAuth', role: 'reviewer'})",
+                    },
+                },
+                "required": ["tags"],
+            },
+        ),
     ]
 
 
@@ -270,6 +311,10 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             return await _deny_permission(arguments)
         elif name == "get_permission_status":
             return await _get_permission_status(arguments)
+        elif name == "get_session_tree":
+            return await _get_session_tree(arguments)
+        elif name == "get_sessions_by_tags":
+            return await _get_sessions_by_tags(arguments)
         else:
             return [
                 TextContent(
@@ -293,9 +338,21 @@ async def _create_session(arguments: dict) -> list[TextContent]:
         branch_name=arguments.get("branch_name"),
         use_worktree=arguments.get("use_worktree", True),
         timeout=arguments.get("timeout"),
+        tags=arguments.get("tags", {}),
+        metadata=arguments.get("metadata", {}),
     )
 
-    session = session_manager.create_session(config)
+    parent_session_id = arguments.get("parent_session_id")
+    session = session_manager.create_session(config, parent_session_id=parent_session_id)
+
+    # Build response with hierarchy info
+    hierarchy_info = ""
+    if session.parent_session_id:
+        hierarchy_info = f"Parent: {session.parent_session_id}\nDepth: {session.depth}\n"
+
+    tags_info = ""
+    if session.config.tags:
+        tags_info = f"Tags: {session.config.tags}\n"
 
     return [
         TextContent(
@@ -304,7 +361,9 @@ async def _create_session(arguments: dict) -> list[TextContent]:
             f"Session ID: {session.session_id}\n"
             f"Branch: {session.branch_name}\n"
             f"Worktree: {session.worktree_path or 'N/A'}\n"
-            f"Status: {session.status}\n\n"
+            f"Status: {session.status}\n"
+            f"{hierarchy_info}"
+            f"{tags_info}\n"
             f"Use 'start_session' with session_id '{session.session_id}' to start the session.",
         )
     ]
@@ -627,6 +686,102 @@ async def _get_permission_status(arguments: dict) -> list[TextContent]:
             f"Decided: {request.decided_at.strftime('%Y-%m-%d %H:%M:%S') if request.decided_at else 'N/A'}\n"
             f"Decided by: {request.decided_by or 'N/A'}\n"
             f"Denial reason: {request.denial_reason or 'N/A'}\n",
+        )
+    ]
+
+
+async def _get_session_tree(arguments: dict) -> list[TextContent]:
+    """Get the session hierarchy tree."""
+    session_id = arguments["session_id"]
+
+    try:
+        tree = session_manager.get_session_tree(session_id)
+
+        def format_tree(node: dict, indent: int = 0) -> list[str]:
+            """Recursively format the session tree."""
+            lines = []
+            prefix = "  " * indent
+
+            # Format current node
+            status_icon = {
+                "created": "○",
+                "running": "●",
+                "completed": "✓",
+                "failed": "✗",
+                "terminated": "⊗",
+            }.get(node["status"], "?")
+
+            tags_str = ""
+            if node["tags"]:
+                tags_str = f" {node['tags']}"
+
+            lines.append(
+                f"{prefix}{status_icon} {node['session_id']} (depth={node['depth']}){tags_str}"
+            )
+            lines.append(f"{prefix}  Task: {node['task'][:60]}")
+            lines.append(f"{prefix}  Branch: {node['branch_name']}")
+
+            # Format children
+            for child in node["children"]:
+                lines.extend(format_tree(child, indent + 1))
+
+            return lines
+
+        tree_lines = format_tree(tree)
+
+        return [
+            TextContent(
+                type="text",
+                text=f"Session Tree:\n\n" + "\n".join(tree_lines),
+            )
+        ]
+
+    except SessionError as e:
+        return [
+            TextContent(
+                type="text",
+                text=f"Error: {str(e)}",
+            )
+        ]
+
+
+async def _get_sessions_by_tags(arguments: dict) -> list[TextContent]:
+    """Get sessions matching specific tags."""
+    tags = arguments["tags"]
+
+    matching_sessions = session_manager.get_sessions_by_tags(tags)
+
+    if not matching_sessions:
+        return [
+            TextContent(
+                type="text",
+                text=f"No sessions found matching tags: {tags}",
+            )
+        ]
+
+    lines = [f"Sessions matching {tags}:\n"]
+    for session in matching_sessions:
+        status_icon = {
+            "created": "○",
+            "running": "●",
+            "completed": "✓",
+            "failed": "✗",
+            "terminated": "⊗",
+        }.get(session.status, "?")
+
+        lines.append(
+            f"\n{status_icon} {session.session_id} (depth={session.depth})"
+        )
+        lines.append(f"  Task: {session.config.task[:60]}")
+        lines.append(f"  Branch: {session.branch_name}")
+        lines.append(f"  Status: {session.status}")
+        if session.config.tags:
+            lines.append(f"  All tags: {session.config.tags}")
+
+    return [
+        TextContent(
+            type="text",
+            text="\n".join(lines),
         )
     ]
 

@@ -57,11 +57,14 @@ class SessionManager:
         ).strip("-")
         return f"claude/{session_id}-{sanitized}"
 
-    def create_session(self, config: SessionConfig) -> Session:
+    def create_session(
+        self, config: SessionConfig, parent_session_id: Optional[str] = None
+    ) -> Session:
         """Create a new Claude Code session.
 
         Args:
             config: Session configuration
+            parent_session_id: Optional parent session ID for hierarchy tracking
 
         Returns:
             Created session
@@ -70,6 +73,17 @@ class SessionManager:
             SessionError: If session creation fails
         """
         session_id = self._generate_session_id()
+
+        # Calculate depth based on parent
+        depth = 0
+        if parent_session_id:
+            parent = self.sessions.get(parent_session_id)
+            if parent:
+                depth = parent.depth + 1
+                # Add this session to parent's children
+                parent.child_session_ids.append(session_id)
+            else:
+                raise SessionError(f"Parent session not found: {parent_session_id}")
 
         # Generate branch name if not provided
         branch_name = config.branch_name or self._generate_branch_name(
@@ -82,6 +96,8 @@ class SessionManager:
             config=config,
             status=SessionStatus.CREATED,
             branch_name=branch_name,
+            parent_session_id=parent_session_id,
+            depth=depth,
         )
 
         # Create worktree if requested
@@ -317,3 +333,120 @@ class SessionManager:
             session.output = process.get_output()
 
         return session.output
+
+    def get_session_tree(self, session_id: str) -> dict:
+        """Get the session hierarchy tree starting from a session.
+
+        Args:
+            session_id: Root session identifier
+
+        Returns:
+            Dictionary representing the session tree with nested children
+
+        Raises:
+            SessionError: If session not found
+        """
+        session = self.sessions.get(session_id)
+        if not session:
+            raise SessionError(f"Session not found: {session_id}")
+
+        def build_tree(s: Session) -> dict:
+            return {
+                "session_id": s.session_id,
+                "task": s.config.task,
+                "status": s.status,
+                "depth": s.depth,
+                "tags": s.config.tags,
+                "branch_name": s.branch_name,
+                "children": [
+                    build_tree(self.sessions[child_id])
+                    for child_id in s.child_session_ids
+                    if child_id in self.sessions
+                ],
+            }
+
+        return build_tree(session)
+
+    def get_ancestors(self, session_id: str) -> list[Session]:
+        """Get all ancestor sessions (parent, grandparent, etc.).
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            List of ancestor sessions, ordered from immediate parent to root
+
+        Raises:
+            SessionError: If session not found
+        """
+        session = self.sessions.get(session_id)
+        if not session:
+            raise SessionError(f"Session not found: {session_id}")
+
+        ancestors = []
+        current = session
+
+        while current.parent_session_id:
+            parent = self.sessions.get(current.parent_session_id)
+            if not parent:
+                break
+            ancestors.append(parent)
+            current = parent
+
+        return ancestors
+
+    def get_descendants(self, session_id: str) -> list[Session]:
+        """Get all descendant sessions (children, grandchildren, etc.).
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            List of all descendant sessions
+
+        Raises:
+            SessionError: If session not found
+        """
+        session = self.sessions.get(session_id)
+        if not session:
+            raise SessionError(f"Session not found: {session_id}")
+
+        descendants = []
+
+        def collect_descendants(s: Session):
+            for child_id in s.child_session_ids:
+                child = self.sessions.get(child_id)
+                if child:
+                    descendants.append(child)
+                    collect_descendants(child)
+
+        collect_descendants(session)
+        return descendants
+
+    def get_root_sessions(self) -> list[Session]:
+        """Get all root sessions (sessions with no parent).
+
+        Returns:
+            List of root sessions
+        """
+        return [s for s in self.sessions.values() if s.parent_session_id is None]
+
+    def get_sessions_by_tags(self, tags: dict[str, str]) -> list[Session]:
+        """Find sessions matching specific tags.
+
+        Args:
+            tags: Dictionary of tag key-value pairs to match
+
+        Returns:
+            List of sessions where all specified tags match
+        """
+        matching_sessions = []
+
+        for session in self.sessions.values():
+            if all(
+                session.config.tags.get(key) == value
+                for key, value in tags.items()
+            ):
+                matching_sessions.append(session)
+
+        return matching_sessions
