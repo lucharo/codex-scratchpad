@@ -484,6 +484,8 @@ async def get_sessions_by_tags(tags: dict[str, str]) -> str:
 
 def main(repo_root: Path | str = None):
     """Run the MCP server."""
+    import sys
+
     global session_manager, permission_manager
 
     # Initialize managers
@@ -496,7 +498,18 @@ def main(repo_root: Path | str = None):
     permission_manager = PermissionManager()
 
     # Run the FastMCP server (synchronous, uses stdio by default)
-    mcp.run()
+    # Handle the case where asyncio is already running (e.g., from Claude Code)
+    try:
+        mcp.run()
+    except RuntimeError as e:
+        if "asyncio" in str(e).lower() or "already running" in str(e).lower():
+            # If there's already an event loop, use sniffio to run in that context
+            print("Detected existing event loop, using nest_asyncio workaround...", file=sys.stderr)
+            import nest_asyncio
+            nest_asyncio.apply()
+            mcp.run()
+        else:
+            raise
 
 
 if __name__ == "__main__":
