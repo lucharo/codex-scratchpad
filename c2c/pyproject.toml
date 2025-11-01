@@ -29,8 +29,8 @@ Issues = "https://github.com/lucharo/codex-scratchpad/issues"
 [project.scripts]
 c2c = "c2c.__main__:cli"
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "pytest>=8.3.4",
     "pytest-asyncio>=0.25.3",
     "pytest-cov>=6.0.0",

@@ -1,6 +1,5 @@
 """MCP server implementation for c2c using FastMCP."""
 
-import asyncio
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -483,7 +482,7 @@ async def get_sessions_by_tags(tags: dict[str, str]) -> str:
     return "\n".join(lines)
 
 
-async def main(repo_root: Path | str = None):
+def main(repo_root: Path | str = None):
     """Run the MCP server."""
     global session_manager, permission_manager
 
@@ -496,9 +495,9 @@ async def main(repo_root: Path | str = None):
     session_manager = SessionManager(repo_root)
     permission_manager = PermissionManager()
 
-    # Run the FastMCP server
-    await mcp.run()
+    # Run the FastMCP server (synchronous, uses stdio by default)
+    mcp.run()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

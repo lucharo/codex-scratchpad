@@ -1,7 +1,6 @@
 """CLI entry point for c2c MCP server."""
 
 import argparse
-import asyncio
 import sys
 from pathlib import Path
 
@@ -23,7 +22,7 @@ def cli():
     args = parser.parse_args()
 
     try:
-        asyncio.run(main(args.repo_root))
+        main(args.repo_root)
     except KeyboardInterrupt:
         print("\nShutting down...", file=sys.stderr)
         sys.exit(0)
