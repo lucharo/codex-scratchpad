@@ -184,11 +184,42 @@ class SessionManager:
             return
 
         try:
-            # Send the task to the agent
-            response = await client.query(session.config.task)
+            # Initialize output collection for streaming
+            session.output = []
 
-            # Collect the response
-            session.output = [response.content] if hasattr(response, 'content') else [str(response)]
+            # Send the task to the agent
+            await client.query(session.config.task)
+
+            # Receive streaming messages in real-time
+            async for message in client.receive_messages():
+                # Handle different message types from Agent SDK
+                if hasattr(message, 'content'):
+                    # AssistantMessage with content blocks
+                    if isinstance(message.content, list):
+                        for block in message.content:
+                            if hasattr(block, 'text'):
+                                # TextBlock - actual Claude response
+                                session.output.append(block.text)
+                            elif hasattr(block, 'name') and hasattr(block, 'input'):
+                                # ToolUseBlock - tool being executed
+                                session.output.append(f"🔧 Using tool: {block.name}")
+                            elif hasattr(block, 'tool_use_id'):
+                                # ToolResultBlock - tool result
+                                session.output.append(f"✅ Tool completed")
+                            else:
+                                session.output.append(str(block))
+                    else:
+                        session.output.append(str(message.content))
+                elif hasattr(message, 'subtype'):
+                    # ResultMessage - final result
+                    if hasattr(message, 'result') and message.result:
+                        session.output.append(f"🎯 Result: {message.result}")
+                    if hasattr(message, 'is_error') and message.is_error:
+                        session.output.append(f"❌ Task completed with errors")
+                else:
+                    # Any other message type
+                    session.output.append(str(message))
+
             session.completed_at = datetime.now()
             session.status = SessionStatus.COMPLETED
 
@@ -196,7 +227,8 @@ class SessionManager:
             session.status = SessionStatus.FAILED
             session.error_message = str(e)
             session.completed_at = datetime.now()
-            session.output = [f"Error: {str(e)}"]
+            if not session.output:  # Only add error if no previous output
+                session.output = [f"Error: {str(e)}"]
 
         finally:
             # Clean up client
