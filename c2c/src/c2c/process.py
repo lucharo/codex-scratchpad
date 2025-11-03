@@ -46,9 +46,9 @@ class ClaudeCodeProcess:
             ProcessError: If the process fails to start
 
         Note:
-            This assumes Claude Code supports `claude --task "..." --non-interactive`.
-            If the actual CLI interface differs, this will need adjustment.
-            For integration testing, verify the correct Claude Code CLI syntax.
+            Uses interactive mode: `claude "task description"`
+            Interactive mode allows sub-agents to use tools and prompts.
+            For non-interactive mode, use --print flag instead.
         """
         # Find claude executable
         claude_path = shutil.which("claude")
@@ -62,16 +62,20 @@ class ClaudeCodeProcess:
         env = {**os.environ, **self.env_vars}
 
         try:
-            # Start Claude Code with the task
+            # Start Claude Code in persistent interactive mode (no initial task)
+            # Store the task for later delivery via message queue
+            task_file = self.working_dir / ".c2c" / "initial_task.txt"
+            task_file.parent.mkdir(exist_ok=True)
+            task_file.write_text(self.task)
+
+            # Start Claude without arguments to keep it in interactive mode
             self.process = await asyncio.create_subprocess_exec(
                 claude_path,
-                "--task",
-                self.task,
-                "--non-interactive",
                 cwd=self.working_dir,
                 env=env,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
+                stdin=asyncio.subprocess.PIPE,
             )
 
             if self.process.pid is None:

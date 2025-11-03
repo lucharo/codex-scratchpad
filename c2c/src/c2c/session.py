@@ -25,10 +25,10 @@ class SessionManager:
 
         Args:
             repo_root: Path to the git repository root
-            worktree_base: Base directory for worktrees (defaults to repo_root/.worktrees)
+            worktree_base: Base directory for worktrees (defaults to repo_root/.c2c/worktrees)
         """
         self.repo_root = repo_root
-        self.worktree_base = worktree_base or repo_root / ".worktrees"
+        self.worktree_base = worktree_base or repo_root / ".c2c" / "worktrees"
         self.worktree_manager = WorktreeManager(repo_root)
         self.sessions: dict[str, Session] = {}
         self.processes: dict[str, ClaudeCodeProcess] = {}

@@ -9,10 +9,12 @@ import pytest
 
 from c2c.server import (
     cleanup_session,
+    cleanup_worktrees,
     create_session,
     get_session,
     get_session_output,
     list_sessions,
+    list_worktrees,
     start_session,
     terminate_session,
     mcp,
@@ -112,7 +114,7 @@ def test_list_tools():
         terminate_session,
     )
 
-    # Verify all 14 tools are callable functions
+    # Verify all 16 tools are callable functions
     tools = [
         create_session,
         start_session,
@@ -128,9 +130,11 @@ def test_list_tools():
         get_permission_status,
         get_session_tree,
         get_sessions_by_tags,
+        list_worktrees,
+        cleanup_worktrees,
     ]
 
-    assert len(tools) == 14
+    assert len(tools) == 16
     for tool in tools:
         assert callable(tool), f"{tool.__name__} is not callable"
 
@@ -343,3 +347,405 @@ async def test_cleanup_session_with_branch_removal(setup_session_manager):
     )
 
     assert "cleaned up" in result
+
+
+# =============================================================================
+# Worktree Management Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_list_worktrees_when_no_c2c_worktrees_exist(setup_session_manager):
+    """Test listing worktrees when no c2c worktrees exist."""
+    # Mock list_worktrees to return only main repo (no c2c worktrees)
+    with patch.object(
+        setup_session_manager.worktree_manager,
+        "list_worktrees",
+        return_value=[
+            {"path": str(setup_session_manager.repo_root), "branch": "main"}
+        ],
+    ):
+        result = await list_worktrees()
+
+    assert "No c2c worktrees found" in result
+
+
+@pytest.mark.asyncio
+async def test_list_worktrees_shows_tracked_session_as_tracked(setup_session_manager):
+    """Test that list_worktrees shows tracked sessions with correct status."""
+    # Create a session with worktree
+    create_result = await create_session(
+        task="Test tracked worktree",
+        use_worktree=True,
+    )
+
+    # Extract session ID
+    session_id = None
+    for line in create_result.split("\n"):
+        if "Session ID:" in line:
+            session_id = line.split("Session ID:")[1].strip()
+            break
+
+    # Get the session to find worktree path
+    session = setup_session_manager.sessions[session_id]
+    worktree_path = str(session.worktree_path)
+
+    # Mock list_worktrees to return the tracked worktree
+    with patch.object(
+        setup_session_manager.worktree_manager,
+        "list_worktrees",
+        return_value=[
+            {
+                "path": worktree_path,
+                "branch": session.branch_name,
+            }
+        ],
+    ):
+        result = await list_worktrees()
+
+    assert "✓" in result
+    assert "TRACKED" in result
+    assert session_id in result
+
+
+@pytest.mark.asyncio
+async def test_list_worktrees_shows_orphaned_worktree_as_orphaned(
+    setup_session_manager,
+):
+    """Test that list_worktrees identifies orphaned worktrees."""
+    # Mock an orphaned worktree (not tracked in session_manager)
+    fake_orphan_path = (
+        str(setup_session_manager.repo_root) + "/.c2c/worktrees/c2c-orphaned123"
+    )
+
+    with patch.object(
+        setup_session_manager.worktree_manager,
+        "list_worktrees",
+        return_value=[
+            {
+                "path": fake_orphan_path,
+                "branch": "some-orphan-branch",
+            }
+        ],
+    ):
+        result = await list_worktrees()
+
+    assert "⚠" in result
+    assert "ORPHANED" in result
+    assert "c2c-orphaned123" in result
+
+
+@pytest.mark.asyncio
+async def test_list_worktrees_distinguishes_tracked_from_orphaned(
+    setup_session_manager,
+):
+    """Test that list_worktrees correctly categorizes tracked vs orphaned."""
+    # Create a tracked session
+    create_result = await create_session(
+        task="Test mixed worktrees",
+        use_worktree=True,
+    )
+
+    session_id = None
+    for line in create_result.split("\n"):
+        if "Session ID:" in line:
+            session_id = line.split("Session ID:")[1].strip()
+            break
+
+    session = setup_session_manager.sessions[session_id]
+    tracked_path = str(session.worktree_path)
+    orphan_path = str(setup_session_manager.repo_root) + "/.c2c/worktrees/c2c-orphan"
+
+    # Mock both tracked and orphaned worktrees
+    with patch.object(
+        setup_session_manager.worktree_manager,
+        "list_worktrees",
+        return_value=[
+            {"path": tracked_path, "branch": session.branch_name},
+            {"path": orphan_path, "branch": "orphan-branch"},
+        ],
+    ):
+        result = await list_worktrees()
+
+    assert "✓" in result and "TRACKED" in result
+    assert "⚠" in result and "ORPHANED" in result
+
+
+@pytest.mark.asyncio
+async def test_list_worktrees_shows_correct_summary_counts(setup_session_manager):
+    """Test that list_worktrees shows accurate summary counts."""
+    # Create 2 tracked sessions
+    for i in range(2):
+        await create_session(
+            task=f"Tracked session {i}",
+            use_worktree=True,
+        )
+
+    # Get tracked worktrees
+    tracked_worktrees = [
+        {"path": str(s.worktree_path), "branch": s.branch_name}
+        for s in setup_session_manager.sessions.values()
+    ]
+
+    # Add 3 orphaned worktrees
+    orphan_worktrees = [
+        {
+            "path": f"{setup_session_manager.repo_root}/.c2c/worktrees/c2c-orphan{i}",
+            "branch": f"orphan-branch-{i}",
+        }
+        for i in range(3)
+    ]
+
+    with patch.object(
+        setup_session_manager.worktree_manager,
+        "list_worktrees",
+        return_value=tracked_worktrees + orphan_worktrees,
+    ):
+        result = await list_worktrees()
+
+    assert "Summary: 2 tracked, 3 orphaned" in result
+
+
+@pytest.mark.asyncio
+async def test_list_worktrees_suggests_cleanup_when_orphans_exist(
+    setup_session_manager,
+):
+    """Test that list_worktrees suggests cleanup when orphans are found."""
+    orphan_path = str(setup_session_manager.repo_root) + "/.c2c/worktrees/c2c-orphan"
+
+    with patch.object(
+        setup_session_manager.worktree_manager,
+        "list_worktrees",
+        return_value=[{"path": orphan_path, "branch": "orphan-branch"}],
+    ):
+        result = await list_worktrees()
+
+    assert "Use cleanup_worktrees()" in result
+
+
+@pytest.mark.asyncio
+async def test_cleanup_worktrees_when_no_c2c_worktrees_exist(setup_session_manager):
+    """Test cleanup when no c2c worktrees exist."""
+    with patch.object(
+        setup_session_manager.worktree_manager,
+        "list_worktrees",
+        return_value=[],
+    ):
+        result = await cleanup_worktrees()
+
+    assert "No c2c worktrees found to clean up" in result
+
+
+@pytest.mark.asyncio
+async def test_cleanup_worktrees_removes_only_orphaned_by_default(
+    setup_session_manager,
+):
+    """Test that cleanup_worktrees only removes orphaned worktrees by default."""
+    # Create a tracked session
+    create_result = await create_session(
+        task="Tracked session",
+        use_worktree=True,
+    )
+
+    session_id = None
+    for line in create_result.split("\n"):
+        if "Session ID:" in line:
+            session_id = line.split("Session ID:")[1].strip()
+            break
+
+    session = setup_session_manager.sessions[session_id]
+    tracked_path = str(session.worktree_path)
+    orphan_path = str(setup_session_manager.repo_root) + "/.c2c/worktrees/c2c-orphan"
+
+    # Track removal calls
+    removed_paths = []
+
+    def mock_remove(path, force=False):
+        removed_paths.append(str(path))
+
+    with patch.object(
+        setup_session_manager.worktree_manager,
+        "list_worktrees",
+        return_value=[
+            {"path": tracked_path, "branch": session.branch_name},
+            {"path": orphan_path, "branch": "orphan-branch"},
+        ],
+    ), patch.object(
+        setup_session_manager.worktree_manager,
+        "remove_worktree",
+        side_effect=mock_remove,
+    ), patch.object(
+        setup_session_manager.worktree_manager,
+        "cleanup_branch",
+    ):
+        result = await cleanup_worktrees(orphaned_only=True)
+
+    # Only orphan should be removed
+    assert orphan_path in removed_paths
+    assert tracked_path not in removed_paths
+    assert "c2c-orphan" in result
+
+
+@pytest.mark.asyncio
+async def test_cleanup_worktrees_removes_all_when_orphaned_only_false(
+    setup_session_manager,
+):
+    """Test that cleanup removes all worktrees when orphaned_only=False."""
+    # Create a tracked session
+    create_result = await create_session(
+        task="Tracked session",
+        use_worktree=True,
+    )
+
+    session_id = None
+    for line in create_result.split("\n"):
+        if "Session ID:" in line:
+            session_id = line.split("Session ID:")[1].strip()
+            break
+
+    session = setup_session_manager.sessions[session_id]
+    tracked_path = str(session.worktree_path)
+    orphan_path = str(setup_session_manager.repo_root) + "/.c2c/worktrees/c2c-orphan"
+
+    removed_paths = []
+
+    def mock_remove(path, force=False):
+        removed_paths.append(str(path))
+
+    with patch.object(
+        setup_session_manager.worktree_manager,
+        "list_worktrees",
+        return_value=[
+            {"path": tracked_path, "branch": session.branch_name},
+            {"path": orphan_path, "branch": "orphan-branch"},
+        ],
+    ), patch.object(
+        setup_session_manager.worktree_manager,
+        "remove_worktree",
+        side_effect=mock_remove,
+    ), patch.object(
+        setup_session_manager.worktree_manager,
+        "cleanup_branch",
+    ):
+        result = await cleanup_worktrees(orphaned_only=False)
+
+    # Both should be removed
+    assert tracked_path in removed_paths
+    assert orphan_path in removed_paths
+
+
+@pytest.mark.asyncio
+async def test_cleanup_worktrees_removes_associated_branch(setup_session_manager):
+    """Test that cleanup removes the branch associated with a worktree."""
+    orphan_path = str(setup_session_manager.repo_root) + "/.c2c/worktrees/c2c-orphan"
+    branch_name = "orphan-branch"
+
+    removed_branches = []
+
+    def mock_cleanup_branch(branch, force=False):
+        removed_branches.append(branch)
+
+    with patch.object(
+        setup_session_manager.worktree_manager,
+        "list_worktrees",
+        return_value=[{"path": orphan_path, "branch": branch_name}],
+    ), patch.object(
+        setup_session_manager.worktree_manager,
+        "remove_worktree",
+    ), patch.object(
+        setup_session_manager.worktree_manager,
+        "cleanup_branch",
+        side_effect=mock_cleanup_branch,
+    ):
+        result = await cleanup_worktrees()
+
+    assert branch_name in removed_branches
+
+
+@pytest.mark.asyncio
+async def test_cleanup_worktrees_shows_removed_worktrees_in_summary(
+    setup_session_manager,
+):
+    """Test that cleanup shows removed worktrees in summary."""
+    orphan_paths = [
+        f"{setup_session_manager.repo_root}/.c2c/worktrees/c2c-orphan1",
+        f"{setup_session_manager.repo_root}/.c2c/worktrees/c2c-orphan2",
+    ]
+
+    with patch.object(
+        setup_session_manager.worktree_manager,
+        "list_worktrees",
+        return_value=[
+            {"path": orphan_paths[0], "branch": "branch1"},
+            {"path": orphan_paths[1], "branch": "branch2"},
+        ],
+    ), patch.object(
+        setup_session_manager.worktree_manager,
+        "remove_worktree",
+    ), patch.object(
+        setup_session_manager.worktree_manager,
+        "cleanup_branch",
+    ):
+        result = await cleanup_worktrees()
+
+    assert "✓ Removed 2 worktree(s)" in result
+    assert "c2c-orphan1" in result
+    assert "c2c-orphan2" in result
+
+
+@pytest.mark.asyncio
+async def test_cleanup_worktrees_shows_removed_branches_in_summary(
+    setup_session_manager,
+):
+    """Test that cleanup shows removed branches in summary."""
+    with patch.object(
+        setup_session_manager.worktree_manager,
+        "list_worktrees",
+        return_value=[
+            {
+                "path": f"{setup_session_manager.repo_root}/.c2c/worktrees/c2c-orphan1",
+                "branch": "orphan-branch-1",
+            },
+            {
+                "path": f"{setup_session_manager.repo_root}/.c2c/worktrees/c2c-orphan2",
+                "branch": "orphan-branch-2",
+            },
+        ],
+    ), patch.object(
+        setup_session_manager.worktree_manager,
+        "remove_worktree",
+    ), patch.object(
+        setup_session_manager.worktree_manager,
+        "cleanup_branch",
+    ):
+        result = await cleanup_worktrees()
+
+    assert "✓ Deleted 2 branch(es)" in result
+    assert "orphan-branch-1" in result
+    assert "orphan-branch-2" in result
+
+
+@pytest.mark.asyncio
+async def test_cleanup_worktrees_handles_removal_errors_gracefully(
+    setup_session_manager,
+):
+    """Test that cleanup handles removal errors without crashing."""
+    orphan_path = f"{setup_session_manager.repo_root}/.c2c/worktrees/c2c-orphan"
+
+    def mock_remove_with_error(path, force=False):
+        raise Exception("Permission denied")
+
+    with patch.object(
+        setup_session_manager.worktree_manager,
+        "list_worktrees",
+        return_value=[{"path": orphan_path, "branch": "orphan-branch"}],
+    ), patch.object(
+        setup_session_manager.worktree_manager,
+        "remove_worktree",
+        side_effect=mock_remove_with_error,
+    ):
+        result = await cleanup_worktrees()
+
+    assert "⚠ Errors" in result
+    assert "c2c-orphan" in result
+    assert "Permission denied" in result
