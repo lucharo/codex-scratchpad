@@ -236,15 +236,18 @@ async def test_start_session_mock(setup_session_manager):
             session_id = line.split("Session ID:")[1].strip()
             break
 
-    # Mock the process start
-    mock_process = MagicMock()
-    mock_process.start = AsyncMock(return_value=12345)
-    mock_process.wait = AsyncMock(return_value=0)
-    mock_process.get_output = MagicMock(return_value=["output"])
+    # Mock the Agent SDK client
+    mock_client = MagicMock()
+    mock_client.connect = AsyncMock()
+    mock_client.query = AsyncMock()
+    mock_response = MagicMock()
+    mock_response.content = "Task completed successfully"
+    mock_client.query.return_value = mock_response
+    mock_client.disconnect = AsyncMock()
 
     with patch(
-        "c2c.session.ClaudeCodeProcess",
-        return_value=mock_process,
+        "c2c.session.ClaudeSDKClient",
+        return_value=mock_client,
     ):
         result = await start_session(session_id=session_id)
 

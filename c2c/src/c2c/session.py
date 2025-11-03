@@ -1,4 +1,4 @@
-"""Session management for Claude Code instances."""
+"""Session management for Claude Code instances using Agent SDK."""
 
 import asyncio
 import uuid
@@ -6,8 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
 from .models import Session, SessionConfig, SessionStatus, SessionSummary
-from .process import ClaudeCodeProcess, ProcessError
 from .worktree import WorktreeManager, WorktreeError
 
 
@@ -31,7 +31,7 @@ class SessionManager:
         self.worktree_base = worktree_base or repo_root / ".c2c" / "worktrees"
         self.worktree_manager = WorktreeManager(repo_root)
         self.sessions: dict[str, Session] = {}
-        self.processes: dict[str, ClaudeCodeProcess] = {}
+        self.clients: dict[str, ClaudeSDKClient] = {}
 
         # Ensure worktree base directory exists
         self.worktree_base.mkdir(parents=True, exist_ok=True)
@@ -119,7 +119,7 @@ class SessionManager:
         return session
 
     async def start_session(self, session_id: str) -> None:
-        """Start a Claude Code session.
+        """Start a Claude Code session and execute its task using Agent SDK.
 
         Args:
             session_id: Session identifier
@@ -144,69 +144,66 @@ class SessionManager:
                 else self.repo_root
             )
 
-            # Create and start process
-            process = ClaudeCodeProcess(
-                working_dir=working_dir,
-                task=session.config.task,
-                env_vars=session.config.env_vars,
+            # Create Agent SDK options
+            options = ClaudeAgentOptions(
+                cwd=working_dir,
+                env=session.config.env_vars or {},
+                continue_conversation=True,
+                permission_mode="default"
             )
 
-            pid = await process.start()
+            # Create and connect SDK client
+            client = ClaudeSDKClient(options)
+            await client.connect()
 
             # Update session
-            session.process_id = pid
             session.status = SessionStatus.RUNNING
             session.started_at = datetime.now()
 
-            # Store process
-            self.processes[session_id] = process
+            # Store client
+            self.clients[session_id] = client
 
-            # Start monitoring task
-            asyncio.create_task(self._monitor_session(session_id))
+            # Execute the task immediately
+            await self._execute_task_in_session(session_id)
 
-        except ProcessError as e:
+        except Exception as e:
             session.status = SessionStatus.FAILED
             session.error_message = str(e)
             raise SessionError(f"Failed to start session: {e}") from e
 
-    async def _monitor_session(self, session_id: str) -> None:
-        """Monitor a session and update its status.
+    async def _execute_task_in_session(self, session_id: str) -> None:
+        """Execute the session's task using the Agent SDK.
 
         Args:
             session_id: Session identifier
         """
         session = self.sessions.get(session_id)
-        process = self.processes.get(session_id)
+        client = self.clients.get(session_id)
 
-        if not session or not process:
+        if not session or not client:
             return
 
         try:
-            # Wait for process to complete
-            exit_code = await process.wait(timeout=session.config.timeout)
+            # Send the task to the agent
+            response = await client.query(session.config.task)
 
-            # Update session based on exit code
-            session.output = process.get_output()
+            # Collect the response
+            session.output = [response.content] if hasattr(response, 'content') else [str(response)]
             session.completed_at = datetime.now()
-
-            if exit_code == 0:
-                session.status = SessionStatus.COMPLETED
-            else:
-                session.status = SessionStatus.FAILED
-                session.error_message = f"Process exited with code {exit_code}"
-
-        except asyncio.TimeoutError:
-            session.status = SessionStatus.FAILED
-            session.error_message = "Session timeout"
-            session.completed_at = datetime.now()
-            session.output = process.get_output()
+            session.status = SessionStatus.COMPLETED
 
         except Exception as e:
             session.status = SessionStatus.FAILED
             session.error_message = str(e)
             session.completed_at = datetime.now()
-            if process:
-                session.output = process.get_output()
+            session.output = [f"Error: {str(e)}"]
+
+        finally:
+            # Clean up client
+            try:
+                await client.disconnect()
+            except:
+                pass
 
     async def terminate_session(
         self, session_id: str, force: bool = False
@@ -224,17 +221,17 @@ class SessionManager:
         if not session:
             raise SessionError(f"Session not found: {session_id}")
 
-        process = self.processes.get(session_id)
-        if process and process.is_running():
-            if force:
-                await process.kill()
-            else:
-                await process.terminate()
+        client = self.clients.get(session_id)
+        if client:
+            try:
+                if force:
+                    await client.interrupt()
+                await client.disconnect()
+            except:
+                pass
 
         session.status = SessionStatus.TERMINATED
         session.completed_at = datetime.now()
-        if process:
-            session.output = process.get_output()
 
     def get_session(self, session_id: str) -> Optional[Session]:
         """Get a session by ID.
@@ -281,10 +278,13 @@ class SessionManager:
         if not session:
             raise SessionError(f"Session not found: {session_id}")
 
-        # Terminate process if running
-        process = self.processes.get(session_id)
-        if process and process.is_running():
-            await process.terminate()
+        # Disconnect client if connected
+        client = self.clients.get(session_id)
+        if client:
+            try:
+                await client.disconnect()
+            except:
+                pass
 
         # Remove worktree if exists
         if session.worktree_path:
@@ -309,7 +309,7 @@ class SessionManager:
 
         # Remove from tracking
         self.sessions.pop(session_id, None)
-        self.processes.pop(session_id, None)
+        self.clients.pop(session_id, None)
 
     async def get_session_output(self, session_id: str) -> list[str]:
         """Get output from a session.
@@ -326,11 +326,6 @@ class SessionManager:
         session = self.sessions.get(session_id)
         if not session:
             raise SessionError(f"Session not found: {session_id}")
-
-        # Get latest output from process if still running
-        process = self.processes.get(session_id)
-        if process:
-            session.output = process.get_output()
 
         return session.output
 

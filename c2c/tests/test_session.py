@@ -76,10 +76,10 @@ def test_session_manager_init(temp_git_repo):
     manager = SessionManager(temp_git_repo)
 
     assert manager.repo_root == temp_git_repo
-    assert manager.worktree_base == temp_git_repo / ".worktrees"
+    assert manager.worktree_base == temp_git_repo / ".c2c" / "worktrees"
     assert manager.worktree_base.exists()
     assert manager.sessions == {}
-    assert manager.processes == {}
+    assert manager.clients == {}
 
 
 def test_session_manager_custom_worktree_base(temp_git_repo):
@@ -162,25 +162,29 @@ async def test_start_session_already_running(temp_git_repo):
 
 @pytest.mark.asyncio
 async def test_start_session_mock(temp_git_repo):
-    """Test starting a session with mocked process."""
+    """Test starting a session with mocked Agent SDK client."""
     manager = SessionManager(temp_git_repo)
     config = SessionConfig(task="Test task", use_worktree=False)
     session = manager.create_session(config)
 
-    mock_process = MagicMock()
-    mock_process.start = AsyncMock(return_value=12345)
-    mock_process.wait = AsyncMock(return_value=0)
-    mock_process.get_output = MagicMock(return_value=["output line"])
+    mock_client = MagicMock()
+    mock_client.connect = AsyncMock()
+    mock_client.query = AsyncMock()
+    mock_response = MagicMock()
+    mock_response.content = "Task completed successfully"
+    mock_client.query.return_value = mock_response
+    mock_client.disconnect = AsyncMock()
 
     with patch(
-        "c2c.session.ClaudeCodeProcess",
-        return_value=mock_process,
+        "c2c.session.ClaudeSDKClient",
+        return_value=mock_client,
     ):
         await manager.start_session(session.session_id)
 
-    assert session.status == SessionStatus.RUNNING
-    assert session.process_id == 12345
+    assert session.status == SessionStatus.COMPLETED
     assert session.started_at is not None
+    assert session.completed_at is not None
+    assert "Task completed successfully" in session.output[0]
 
 
 def test_get_session(temp_git_repo):
@@ -238,20 +242,18 @@ async def test_terminate_session(temp_git_repo):
     config = SessionConfig(task="Test task", use_worktree=False)
     session = manager.create_session(config)
 
-    # Mock process
-    mock_process = MagicMock()
-    mock_process.is_running = MagicMock(return_value=True)
-    mock_process.terminate = AsyncMock()
-    mock_process.get_output = MagicMock(return_value=["output"])
+    # Mock client
+    mock_client = MagicMock()
+    mock_client.disconnect = AsyncMock()
 
-    manager.processes[session.session_id] = mock_process
+    manager.clients[session.session_id] = mock_client
     session.status = SessionStatus.RUNNING
 
     await manager.terminate_session(session.session_id)
 
     assert session.status == SessionStatus.TERMINATED
     assert session.completed_at is not None
-    mock_process.terminate.assert_called_once()
+    mock_client.disconnect.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -261,19 +263,19 @@ async def test_terminate_session_force(temp_git_repo):
     config = SessionConfig(task="Test task", use_worktree=False)
     session = manager.create_session(config)
 
-    # Mock process
-    mock_process = MagicMock()
-    mock_process.is_running = MagicMock(return_value=True)
-    mock_process.kill = AsyncMock()
-    mock_process.get_output = MagicMock(return_value=["output"])
+    # Mock client
+    mock_client = MagicMock()
+    mock_client.interrupt = AsyncMock()
+    mock_client.disconnect = AsyncMock()
 
-    manager.processes[session.session_id] = mock_process
+    manager.clients[session.session_id] = mock_client
     session.status = SessionStatus.RUNNING
 
     await manager.terminate_session(session.session_id, force=True)
 
     assert session.status == SessionStatus.TERMINATED
-    mock_process.kill.assert_called_once()
+    mock_client.interrupt.assert_called_once()
+    mock_client.disconnect.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -323,11 +325,8 @@ async def test_get_session_output(temp_git_repo):
     config = SessionConfig(task="Test task", use_worktree=False)
     session = manager.create_session(config)
 
-    # Mock process
-    mock_process = MagicMock()
-    mock_process.get_output = MagicMock(return_value=["line 1", "line 2"])
-
-    manager.processes[session.session_id] = mock_process
+    # Set session output directly since Agent SDK manages it
+    session.output = ["line 1", "line 2"]
 
     output = await manager.get_session_output(session.session_id)
 
