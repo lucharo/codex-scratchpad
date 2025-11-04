@@ -8,7 +8,7 @@ Minimal Claude Code to Claude Code bidirectional agent communication.
 git clone <repo-url>
 cd c2c
 uv sync
-claude mcp add c2c-dev -- uv run python c2c_dev.py
+claude mcp add c2c-dev -- uv run --directory $(pwd) python c2c_dev.py
 ```
 
 ## Tools
