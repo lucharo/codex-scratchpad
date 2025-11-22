@@ -18,3 +18,10 @@ tpb = "tpb.cli:main"
 dev = [
     "pytest>=9.0.1",
 ]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = true
