@@ -21,3 +21,7 @@ claude mcp add c2c-dev -- uv run --directory $(pwd) python c2c_dev.py
 - `clear_all_sessions()` - End all conversations
 
 Conversations saved in JSONL at `~/.claude/projects/c2c-agent-conversations/`
+
+```
+uv run --directory $(pwd)/c2c --with claude-agent-sdk python c2c_dev.py
+```
