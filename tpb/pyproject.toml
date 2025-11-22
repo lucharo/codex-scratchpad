@@ -1,0 +1,20 @@
+[project]
+name = "tpb"
+version = "0.1.0"
+description = "Research-focused terminal client for The Pirate Bay"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pysocks>=1.7.1",
+    "python-gnupg>=0.5.5",
+    "textual>=6.6.0",
+    "typer>=0.20.0",
+]
+
+[project.scripts]
+tpb = "tpb.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.1",
+]
