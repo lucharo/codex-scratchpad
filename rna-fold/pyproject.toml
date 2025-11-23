@@ -1,0 +1,31 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "rna-fold"
+version = "0.1.0"
+description = "RNA secondary structure prediction using LinearFold and EternaFold"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-benchmark>=4.0",
+]
+
+[tool.maturin]
+# The name of the Python module
+module-name = "rna_fold"
+# Build with Python binding features
+features = ["python"]
+# Python source directory (for pure Python code alongside Rust)
+python-source = "python"
+# Include Rust lib
+bindings = "pyo3"

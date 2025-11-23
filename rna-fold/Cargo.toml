@@ -1,0 +1,28 @@
+[package]
+name = "rna-fold"
+version = "0.1.0"
+edition = "2021"
+authors = ["RNA Fold Contributors"]
+description = "Educational Rust implementation of LinearFold and EternaFold RNA folding algorithms"
+license = "MIT"
+
+# This is a library that can be used as a Rust crate or Python module
+[lib]
+name = "rna_fold"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# PyO3 for Python bindings
+pyo3 = { version = "0.20", features = ["extension-module"], optional = true }
+
+# For ordered floating-point comparisons
+ordered-float = "4.2"
+
+[features]
+# Python bindings feature
+python = ["pyo3"]
+default = []
+
+[dev-dependencies]
+# For testing
+criterion = "0.5"

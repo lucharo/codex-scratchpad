@@ -1,0 +1,31 @@
+[project]
+name = "rna-fold"
+version = "0.1.0"
+description = "Educational Rust implementation of LinearFold and EternaFold RNA folding algorithms"
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-64", "osx-arm64"]
+
+[tasks]
+# Rust tasks
+build = "cargo build"
+test = "cargo test"
+run = "cargo run"
+release = "cargo build --release"
+
+# Python binding tasks
+build-python = "cd python && maturin develop"
+test-python = "pytest python/tests"
+
+[dependencies]
+# Rust toolchain
+rust = ">=1.70"
+cargo = ">=1.70"
+
+# Python for bindings
+python = ">=3.10"
+maturin = ">=1.0"
+pytest = ">=7.0"
+
+[feature.dev.dependencies]
+# Development tools
+rust-analyzer = "*"
