@@ -1,0 +1,6 @@
+# Ignore cached data and build artifacts
+# data files are small and checked in
+__pycache__/
+*.egg-info/
+.venv/
+.python-version
