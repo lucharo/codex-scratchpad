@@ -5,6 +5,8 @@ A lean marimo notebook app for checking historical performance of UK train route
 ## Quick Start
 
 ```bash
+cd uk-train-stats
+
 # Run the app (auto-installs dependencies)
 uvx marimo run train_stats.py
 
@@ -12,54 +14,53 @@ uvx marimo run train_stats.py
 uvx marimo edit train_stats.py
 ```
 
+## Structure
+
+```
+uk-train-stats/
+├── train_stats.py   # Main marimo notebook (UI + plots)
+├── hsp_api.py       # HSP API client for live data
+├── demo_data.py     # Synthetic data generator
+├── stats.py         # Statistics calculations
+└── README.md
+```
+
 ## Features
 
-- **Route selection**: Choose any origin/destination pair from common UK stations
-- **Time-slot analysis**: Check performance for specific departure times
-- **Historical stats**: View 7-day, 30-day, and 365-day performance metrics
-- **Day-of-week breakdown**: See which days have the best/worst performance
-- **Delay distribution**: Cumulative probability charts showing delay likelihood
-- **Refund probability**: See your chances of qualifying for Delay Repay compensation
-- **Heatmap**: Visual guide for when to travel to avoid delays
+- **Route selection**: Choose origin/destination from common UK stations
+- **Time-slot analysis**: Performance for specific departure times (30-min buckets)
+- **Historical stats**: 7/30/365 day performance summaries
+- **Day-of-week breakdown**: See which days perform best/worst
+- **Delay distribution**: CDF chart with refund threshold markers
+- **Heatmap**: Visual guide for when to travel
 
-## Data Sources
+## Data
 
-### Demo Mode (default)
-Leave API credentials blank to use realistic simulated data.
+**Demo mode** (default): Uses realistic synthetic data - just click "Load Data".
 
-### Live Data (HSP API)
-1. Register at [opendata.nationalrail.co.uk](https://opendata.nationalrail.co.uk)
-2. Enable HSP access in your account settings
-3. Enter your credentials in the app
-
-Or set environment variables:
-```bash
-export NR_EMAIL="your-email@example.com"
-export NR_PASSWORD="your-password"
-```
+**Live data**: Register at [opendata.nationalrail.co.uk](https://opendata.nationalrail.co.uk), enable HSP access, then integrate credentials into `hsp_api.py`.
 
 ## Metrics
 
-| Metric | Definition |
+| Status | Definition |
 |--------|------------|
-| On Time | Arrived within 5 minutes of schedule |
-| Late | Arrived 5-29 minutes after schedule |
-| Very Late | Arrived 30+ minutes late |
-| Delay Repay | 15+ minutes late (eligible for compensation) |
+| On Time | ≤5 min late |
+| Late | 5-29 min late |
+| Very Late | 30+ min late |
+| Delay Repay | 15+ min (compensation eligible) |
 
-## Refund Thresholds (typical)
+## Refund Thresholds
 
-| Delay | Compensation |
-|-------|--------------|
-| 15-29 min | 25% of single fare |
-| 30-59 min | 50% of single fare |
-| 60+ min | Full refund |
+| Delay | Typical Compensation |
+|-------|---------------------|
+| 15-29 min | 25% |
+| 30-59 min | 50% |
+| 60+ min | 100% |
 
-*Note: Varies by train operator. Check your TOC's Delay Repay scheme.*
+*Varies by operator.*
 
-## Tech Stack
+## Tech
 
-- **marimo**: Reactive notebook/app framework
-- **DuckDB**: Embedded analytics database
-- **Polars**: Fast DataFrame library
-- **Altair**: Declarative visualizations
+- **marimo**: Reactive notebook
+- **Polars**: DataFrames
+- **Altair**: Charts
