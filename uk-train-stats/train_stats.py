@@ -55,22 +55,30 @@ def _():
 # =============================================================================
 
 @app.cell
-def _(mo, STATIONS):
-    station_options = {f"{code} - {name}": code for code, name in sorted(STATIONS.items(), key=lambda x: x[1])}
-
-    origin_dropdown = mo.ui.dropdown(options=station_options, value="CDF - Cardiff Central", label="Origin")
-    dest_dropdown = mo.ui.dropdown(options=station_options, value="PAD - London Paddington", label="Destination")
-    time_input = mo.ui.time(value=None, label="Departure Time (optional)")
-
-    mo.hstack([origin_dropdown, dest_dropdown, time_input], justify="start", gap=2)
-    return origin_dropdown, dest_dropdown, time_input, station_options
+def _():
+    # Time slots for departure time selection (30-min buckets)
+    TIME_SLOTS = [""] + [f"{h:02d}:{m:02d}" for h in range(5, 24) for m in [0, 30]]
+    return (TIME_SLOTS,)
 
 
 @app.cell
-def _(origin_dropdown, dest_dropdown, time_input):
+def _(mo, STATIONS, TIME_SLOTS):
+    station_options = {f"{code} - {name}": code for code, name in sorted(STATIONS.items(), key=lambda x: x[1])}
+    time_options = {"(any time)": ""} | {t: t for t in TIME_SLOTS if t}
+
+    origin_dropdown = mo.ui.dropdown(options=station_options, value="CDF - Cardiff Central", label="Origin")
+    dest_dropdown = mo.ui.dropdown(options=station_options, value="PAD - London Paddington", label="Destination")
+    time_dropdown = mo.ui.dropdown(options=time_options, value="(any time)", label="Departure Time")
+
+    mo.hstack([origin_dropdown, dest_dropdown, time_dropdown], justify="start", gap=2)
+    return origin_dropdown, dest_dropdown, time_dropdown, station_options, time_options
+
+
+@app.cell
+def _(origin_dropdown, dest_dropdown, time_dropdown):
     origin_crs = origin_dropdown.value
     dest_crs = dest_dropdown.value
-    selected_time = time_input.value
+    selected_time = time_dropdown.value if time_dropdown.value else None
     return origin_crs, dest_crs, selected_time
 
 
@@ -177,8 +185,9 @@ def _(mo, selected_time, services_df):
     from stats import get_time_slot_stats
 
     if selected_time:
-        _hour = selected_time.hour
-        _slot_start = (selected_time.minute // 30) * 30
+        # Parse time string "HH:MM" to get slot
+        _hour, _minute = map(int, selected_time.split(":"))
+        _slot_start = (_minute // 30) * 30
         dep_slot = f"{_hour:02d}:{_slot_start:02d}-{_hour:02d}:{_slot_start + 29:02d}"
 
         slot_stats = get_time_slot_stats(services_df, dep_slot)
