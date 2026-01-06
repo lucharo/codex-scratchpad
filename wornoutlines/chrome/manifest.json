@@ -1,18 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "Line Churn for GitHub",
+  "name": "Worn Out Lines",
   "version": "0.1.0",
-  "description": "Visualize how frequently each line has been modified in git history",
+  "description": "Visualize line churn on GitHub - see which lines change frequently",
   "permissions": ["storage"],
   "host_permissions": ["https://github.com/*", "https://api.github.com/*"],
   "content_scripts": [
     {
       "matches": ["https://github.com/*/*/blob/*"],
-      "js": ["content.js"],
-      "css": ["styles.css"]
+      "js": ["content.js"]
     }
-  ],
-  "icons": {
-    "48": "icon.png"
-  }
+  ]
 }

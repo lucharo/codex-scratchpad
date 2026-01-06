@@ -1,9 +1,9 @@
 {
-  "name": "line-churn",
-  "displayName": "Line Churn",
-  "description": "Visualize how frequently each line has been modified in git history",
+  "name": "worn-out-lines",
+  "displayName": "Worn Out Lines",
+  "description": "Visualize line churn - see which lines change frequently",
   "version": "0.1.0",
-  "publisher": "line-churn",
+  "publisher": "wornoutlines",
   "license": "MIT",
   "engines": {
     "vscode": "^1.74.0"
@@ -15,34 +15,34 @@
   "contributes": {
     "commands": [
       {
-        "command": "lineChurn.toggle",
-        "title": "Line Churn: Toggle"
+        "command": "wornOutLines.toggle",
+        "title": "Worn Out Lines: Toggle"
       },
       {
-        "command": "lineChurn.refresh",
-        "title": "Line Churn: Refresh"
+        "command": "wornOutLines.refresh",
+        "title": "Worn Out Lines: Refresh"
       }
     ],
     "configuration": {
-      "title": "Line Churn",
+      "title": "Worn Out Lines",
       "properties": {
-        "lineChurn.enabled": {
+        "wornOutLines.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable line churn visualization"
+          "description": "Enable churn visualization"
         },
-        "lineChurn.maxOpacity": {
+        "wornOutLines.maxOpacity": {
           "type": "number",
           "default": 0.3,
           "minimum": 0.1,
           "maximum": 0.8,
-          "description": "Maximum background opacity for high-churn lines"
+          "description": "Maximum background opacity"
         },
-        "lineChurn.colorScheme": {
+        "wornOutLines.colorScheme": {
           "type": "string",
           "enum": ["heat", "blue", "mono"],
           "default": "heat",
-          "description": "Color scheme: heat (green→red), blue, mono (grayscale)"
+          "description": "Color scheme"
         }
       }
     }
