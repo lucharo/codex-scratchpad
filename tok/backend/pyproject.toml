@@ -15,6 +15,7 @@ dependencies = [
     "pydantic-settings>=2.0.0",
     "aiofiles>=24.1.0",
     "python-ulid>=2.0.0",
+    "platformdirs>=4.0.0",
 ]
 
 [project.optional-dependencies]
