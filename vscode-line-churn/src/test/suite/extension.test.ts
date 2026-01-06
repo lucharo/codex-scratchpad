@@ -6,7 +6,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 
 suite('Extension Test Suite', () => {
-    vscode.window.showInformationMessage('Starting extension tests.');
+    void vscode.window.showInformationMessage('Starting extension tests.');
 
     test('Extension should be present', () => {
         assert.ok(

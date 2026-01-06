@@ -3,6 +3,7 @@
  */
 
 import * as path from 'path';
+// eslint-disable-next-line @typescript-eslint/naming-convention
 import Mocha from 'mocha';
 import { glob } from 'glob';
 

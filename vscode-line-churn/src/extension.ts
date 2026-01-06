@@ -136,7 +136,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
             }
         }),
 
-        vscode.commands.registerCommand('lineChurn.showLineHistory', async () => {
+        vscode.commands.registerCommand('lineChurn.showLineHistory', () => {
             const editor = vscode.window.activeTextEditor;
             if (!editor) {
                 return;
@@ -152,8 +152,8 @@ function registerCommands(context: vscode.ExtensionContext): void {
             }
 
             const line = editor.selection.active.line;
-            const lineData = churnData.lines[line];
-            if (!lineData) {
+            const lineData = churnData.lines[line] as typeof churnData.lines[number] | undefined;
+            if (lineData === undefined) {
                 return;
             }
 

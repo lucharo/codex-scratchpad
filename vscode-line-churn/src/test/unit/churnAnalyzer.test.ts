@@ -132,7 +132,9 @@ commit 4
     suite('normalization', () => {
         function normalizeChurn(counts: number[]): number[] {
             const max = Math.max(...counts);
-            if (max === 0) return counts.map(() => 0);
+            if (max === 0) {
+                return counts.map(() => 0);
+            }
             return counts.map(c => c / max);
         }
 
@@ -228,7 +230,7 @@ suite('Color Generation', () => {
     });
 
     test('should generate yellow for mid intensity', () => {
-        const color = heatColor(0.5, 0.3);
+        const color = heatColor(0.5, 0.15);  // opacity pre-computed as intensity * maxOpacity
         // At intensity 0.5: r=255, g=255
         assert.strictEqual(color, 'rgba(255, 255, 50, 0.150)');
     });

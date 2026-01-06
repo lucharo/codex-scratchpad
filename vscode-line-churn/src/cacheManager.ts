@@ -160,7 +160,7 @@ export class CacheManager implements vscode.Disposable {
             }
         }
 
-        if (oldestKey) {
+        if (oldestKey !== null) {
             this.cache.delete(oldestKey);
         }
     }

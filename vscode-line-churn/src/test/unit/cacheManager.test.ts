@@ -20,7 +20,9 @@ class TestCacheManager {
 
     get(filePath: string): ChurnData | null {
         const entry = this.cache.get(filePath);
-        if (!entry) return null;
+        if (!entry) {
+            return null;
+        }
 
         const age = Date.now() - entry.data.analyzedAt.getTime();
         if (age > this.maxAge) {
