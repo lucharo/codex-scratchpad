@@ -1,9 +1,8 @@
 """Pydantic schemas for API request/response validation."""
 
 from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel, Field
 
+from pydantic import BaseModel, Field
 
 # === Tree Schemas ===
 
@@ -12,7 +11,7 @@ class TreeCreate(BaseModel):
 
 
 class TreeUpdate(BaseModel):
-    name: Optional[str] = Field(None, max_length=255)
+    name: str | None = Field(None, max_length=255)
 
 
 class TreeResponse(BaseModel):
@@ -43,10 +42,10 @@ class BranchOriginResponse(BaseModel):
 class BranchResponse(BaseModel):
     id: str
     tree_id: str
-    parent_branch_id: Optional[str]
+    parent_branch_id: str | None
     name: str
     is_root: bool
-    origin: Optional[BranchOriginResponse] = None
+    origin: BranchOriginResponse | None = None
     message_count: int = 0
     created_at: datetime
 
@@ -62,7 +61,7 @@ class BranchCreate(BaseModel):
     highlight_end: int
     highlighted_text: str
     user_prompt: str
-    name: Optional[str] = None
+    name: str | None = None
 
 
 # === Message Schemas ===
@@ -72,7 +71,7 @@ class ToolCallResponse(BaseModel):
     tool_use_id: str
     name: str
     input_data: dict
-    result: Optional[str]
+    result: str | None
     is_error: bool
 
     class Config:
@@ -94,9 +93,9 @@ class MessageResponse(BaseModel):
     branch_id: str
     role: str
     content: str
-    thinking: Optional[str] = None
+    thinking: str | None = None
     position: int
-    model: Optional[str] = None
+    model: str | None = None
     tool_calls: list[ToolCallResponse] = []
     attachments: list[AttachmentResponse] = []
     created_at: datetime

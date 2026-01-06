@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
-from sqlalchemy import String, DateTime
+
+from sqlalchemy import DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ulid import ULID
 

@@ -4,7 +4,7 @@ Tests the SSE serialization logic.
 """
 
 import json
-import pytest
+
 from app.services.claude_service import StreamEvent
 
 
@@ -29,7 +29,7 @@ class TestStreamEventToSse:
         assert result.startswith("data: ")
         assert result.endswith("\n\n")
         payload = json.loads(result[6:-2])  # Strip "data: " and "\n\n"
-        assert payload == {"type": "complete"}
+        assert payload == {"type": "complete", "is_error": False}
 
     def test_serializes_text_event_with_content(self):
         # Arrange
@@ -44,6 +44,7 @@ class TestStreamEventToSse:
             "type": "text",
             "content": "Hello world",
             "model": "claude-3",
+            "is_error": False,
         }
 
     def test_serializes_tool_use_event_with_tool_fields(self):
@@ -63,6 +64,7 @@ class TestStreamEventToSse:
             "type": "tool_use",
             "tool_name": "Bash",
             "tool_input": {"command": "ls -la"},
+            "is_error": False,
         }
 
     def test_excludes_none_values_from_serialized_output(self):

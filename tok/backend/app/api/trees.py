@@ -1,21 +1,21 @@
 """API routes for Trees and Branches."""
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.database import get_db
-from app.models import Tree, Branch, Message
 from app.api.schemas import (
-    TreeCreate,
-    TreeUpdate,
-    TreeResponse,
-    TreeDetailResponse,
-    BranchResponse,
     BranchCreate,
+    BranchResponse,
     BranchWithMessages,
+    TreeCreate,
+    TreeDetailResponse,
+    TreeResponse,
+    TreeUpdate,
 )
+from app.core.database import get_db
+from app.models import Branch, Message, Tree
 
 router = APIRouter(prefix="/trees", tags=["trees"])
 

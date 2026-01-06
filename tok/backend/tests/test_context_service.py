@@ -4,13 +4,12 @@ Tests the pure business logic of building conversation context.
 No mocking needed - these are pure functions operating on dataclasses.
 """
 
-import pytest
 from app.services.context import (
-    MessageContext,
     BranchOriginContext,
-    build_prompt_from_context,
+    MessageContext,
     build_branch_context,
     build_linear_context,
+    build_prompt_from_context,
 )
 
 

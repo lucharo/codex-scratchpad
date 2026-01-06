@@ -1,16 +1,16 @@
 """API routes for file uploads."""
 
+
 import aiofiles
-from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from ulid import ULID
 
+from app.api.schemas import AttachmentResponse
 from app.core.config import settings
 from app.core.database import get_db
-from app.models import Message, Attachment
-from app.api.schemas import AttachmentResponse
+from app.models import Attachment, Message
 
 router = APIRouter(prefix="/upload", tags=["uploads"])
 

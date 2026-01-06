@@ -1,14 +1,15 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
-from sqlalchemy import String, DateTime, Integer, Text, ForeignKey
+
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ulid import ULID
 
 from app.core.database import Base
 
 if TYPE_CHECKING:
-    from app.models.tree import Tree
     from app.models.message import Message
+    from app.models.tree import Tree
 
 
 def generate_ulid() -> str:
@@ -60,13 +61,13 @@ class Branch(Base):
 
     id: Mapped[str] = mapped_column(String(26), primary_key=True, default=generate_ulid)
     tree_id: Mapped[str] = mapped_column(String(26), ForeignKey("trees.id"))
-    parent_branch_id: Mapped[Optional[str]] = mapped_column(
+    parent_branch_id: Mapped[str | None] = mapped_column(
         String(26), ForeignKey("branches.id"), nullable=True
     )
     name: Mapped[str] = mapped_column(String(255), default="Main")
 
     # Claude session tracking (for resuming conversations)
-    session_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    session_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(

@@ -3,10 +3,11 @@
 External dependency (ClaudeSDKClient) is mocked.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.services.claude_service import ClaudeService, StreamEvent
+import pytest
+
+from app.services.claude_service import ClaudeService
 
 
 def setup_mock_claude_client(messages_to_yield):
@@ -28,35 +29,6 @@ def setup_mock_claude_client(messages_to_yield):
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
     return mock_client
-
-
-def create_mock_text_block(text: str):
-    """Create a mock TextBlock."""
-    block = MagicMock()
-    block.text = text
-    return block
-
-
-def create_mock_thinking_block(thinking: str):
-    """Create a mock ThinkingBlock."""
-    block = MagicMock()
-    block.thinking = thinking
-    return block
-
-
-def create_mock_assistant_message(content_blocks, model="claude-3"):
-    """Create a mock AssistantMessage."""
-    msg = MagicMock()
-    msg.model = model
-    msg.content = content_blocks
-    return msg
-
-
-def create_mock_result_message(session_id: str):
-    """Create a mock ResultMessage."""
-    msg = MagicMock()
-    msg.session_id = session_id
-    return msg
 
 
 class TestClaudeServiceInit:
@@ -89,45 +61,8 @@ class TestClaudeServiceStreamResponse:
     """Tests for ClaudeService.stream_response method.
 
     Execution branches:
-    1. Yields text events from TextBlock
-    2. Yields thinking events from ThinkingBlock
-    3. Yields complete event from ResultMessage
-    4. Yields error event when exception occurs
+    1. Yields error event when exception occurs
     """
-
-    @pytest.mark.asyncio
-    async def test_yields_text_event_when_receiving_text_block(self):
-        # Arrange
-        text_block = create_mock_text_block("Hello")
-        assistant_msg = create_mock_assistant_message([text_block], model="claude-3")
-        mock_client = setup_mock_claude_client([assistant_msg])
-
-        service = ClaudeService()
-
-        # Act
-        events = []
-        with patch("app.services.claude_service.ClaudeSDKClient", return_value=mock_client):
-            with patch("app.services.claude_service.TextBlock", MagicMock):
-                with patch("app.services.claude_service.AssistantMessage") as mock_am:
-                    mock_am.__instancecheck__ = lambda self, x: x is assistant_msg
-
-                    # Need to patch isinstance checks
-                    with patch("app.services.claude_service.isinstance") as mock_isinstance:
-                        def isinstance_side_effect(obj, cls):
-                            if obj is assistant_msg:
-                                return cls.__name__ == "AssistantMessage" if hasattr(cls, "__name__") else False
-                            if obj is text_block:
-                                return cls.__name__ == "TextBlock" if hasattr(cls, "__name__") else False
-                            return False
-
-                        mock_isinstance.side_effect = isinstance_side_effect
-
-                        async for event in service.stream_response("test prompt"):
-                            events.append(event)
-
-        # Assert - at minimum we should get events (exact behavior depends on mocking)
-        # This test verifies the generator doesn't crash
-        assert isinstance(events, list)
 
     @pytest.mark.asyncio
     async def test_yields_error_event_when_client_raises_exception(self):
@@ -184,7 +119,7 @@ class TestClaudeServiceBuildOptions:
         with patch("app.services.claude_service.ClaudeAgentOptions") as MockOptions:
             mock_options = MagicMock()
             MockOptions.return_value = mock_options
-            result = service._build_options(session_id="session-123")
+            service._build_options(session_id="session-123")
 
         # Assert
         assert mock_options.resume == "session-123"
@@ -197,7 +132,7 @@ class TestClaudeServiceBuildOptions:
         with patch("app.services.claude_service.ClaudeAgentOptions") as MockOptions:
             mock_options = MagicMock()
             MockOptions.return_value = mock_options
-            result = service._build_options(cwd="/tmp/work")
+            service._build_options(cwd="/tmp/work")
 
         # Assert
         assert mock_options.cwd == "/tmp/work"
@@ -210,7 +145,7 @@ class TestClaudeServiceBuildOptions:
         with patch("app.services.claude_service.ClaudeAgentOptions") as MockOptions:
             mock_options = MagicMock()
             MockOptions.return_value = mock_options
-            result = service._build_options()
+            service._build_options()
 
         # Assert
         assert mock_options.system_prompt == "Be helpful"

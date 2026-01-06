@@ -5,18 +5,18 @@ including streaming responses, tool calls, and thinking blocks.
 """
 
 import json
-from typing import AsyncGenerator, Optional
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 
 from claude_agent_sdk import (
-    ClaudeSDKClient,
-    ClaudeAgentOptions,
     AssistantMessage,
+    ClaudeAgentOptions,
+    ClaudeSDKClient,
+    ResultMessage,
     TextBlock,
     ThinkingBlock,
-    ToolUseBlock,
     ToolResultBlock,
-    ResultMessage,
+    ToolUseBlock,
 )
 
 
@@ -25,13 +25,13 @@ class StreamEvent:
     """Events emitted during streaming."""
 
     type: str  # "text", "thinking", "tool_use", "tool_result", "complete", "error"
-    content: Optional[str] = None
-    tool_name: Optional[str] = None
-    tool_input: Optional[dict] = None
-    tool_result: Optional[str] = None
+    content: str | None = None
+    tool_name: str | None = None
+    tool_input: dict | None = None
+    tool_result: str | None = None
     is_error: bool = False
-    session_id: Optional[str] = None
-    model: Optional[str] = None
+    session_id: str | None = None
+    model: str | None = None
 
     def to_sse(self) -> str:
         """Convert to Server-Sent Event format."""
@@ -57,16 +57,16 @@ class ClaudeService:
 
     def __init__(
         self,
-        allowed_tools: Optional[list[str]] = None,
-        system_prompt: Optional[str] = None,
+        allowed_tools: list[str] | None = None,
+        system_prompt: str | None = None,
     ):
         self.allowed_tools = allowed_tools or self.DEFAULT_TOOLS
         self.system_prompt = system_prompt
 
     def _build_options(
         self,
-        session_id: Optional[str] = None,
-        cwd: Optional[str] = None,
+        session_id: str | None = None,
+        cwd: str | None = None,
     ) -> ClaudeAgentOptions:
         """Build ClaudeAgentOptions for a request."""
         options = ClaudeAgentOptions(
@@ -88,8 +88,8 @@ class ClaudeService:
     async def stream_response(
         self,
         prompt: str,
-        session_id: Optional[str] = None,
-        cwd: Optional[str] = None,
+        session_id: str | None = None,
+        cwd: str | None = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         """Stream a response from Claude.
 
@@ -108,7 +108,7 @@ class ClaudeService:
                 await client.connect()
                 await client.query(prompt)
 
-                current_model: Optional[str] = None
+                current_model: str | None = None
 
                 async for message in client.receive_response():
                     if isinstance(message, AssistantMessage):

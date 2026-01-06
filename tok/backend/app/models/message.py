@@ -1,6 +1,7 @@
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional, Literal
-from sqlalchemy import String, DateTime, Integer, Text, ForeignKey, Boolean, JSON
+from typing import TYPE_CHECKING
+
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ulid import ULID
 
@@ -28,7 +29,7 @@ class ToolCall(Base):
     input_data: Mapped[dict] = mapped_column(JSON, default=dict)  # Tool input
 
     # Result
-    result: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    result: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_error: Mapped[bool] = mapped_column(Boolean, default=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -73,13 +74,13 @@ class Message(Base):
     content: Mapped[str] = mapped_column(Text, default="")
 
     # Extended thinking (for assistant messages)
-    thinking: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    thinking: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Position in conversation (for ordering)
     position: Mapped[int] = mapped_column(Integer)
 
     # Metadata
-    model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     # Relationships

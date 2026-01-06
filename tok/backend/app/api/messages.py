@@ -6,13 +6,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.schemas import MessageCreate, MessageResponse
 from app.core.database import get_db
 from app.models import Branch, Message, ToolCall
-from app.api.schemas import MessageCreate, MessageResponse
 from app.services.claude_service import claude_service
 from app.services.context import (
-    MessageContext,
     BranchOriginContext,
+    MessageContext,
     build_branch_context,
     build_linear_context,
     build_prompt_from_context,

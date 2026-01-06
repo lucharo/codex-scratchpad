@@ -1,6 +1,7 @@
-from pydantic_settings import BaseSettings
 from pathlib import Path
+
 from platformdirs import user_data_dir
+from pydantic_settings import BaseSettings
 
 # XDG-compliant data directory
 # Linux: ~/.local/share/tok

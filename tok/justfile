@@ -1,5 +1,6 @@
 # Tree of Knowledge - Development & Deployment Commands
 # Install just: https://github.com/casey/just
+# Uses: uv (Python), npm (frontend), ruff (linting)
 
 # Default recipe - show available commands
 default:
@@ -11,19 +12,23 @@ default:
 
 # Install all dependencies (backend + frontend)
 install:
-    @echo "Installing backend dependencies..."
-    cd backend && pip install -e ".[dev]"
+    @echo "Installing backend dependencies with uv..."
+    cd backend && uv pip install -e ".[dev]"
     @echo "Installing frontend dependencies..."
     cd frontend && npm install
     @echo "Done! Run 'just dev' to start development servers."
 
-# Install backend only
+# Install backend only (with uv)
 install-backend:
-    cd backend && pip install -e ".[dev]"
+    cd backend && uv pip install -e ".[dev]"
 
 # Install frontend only
 install-frontend:
     cd frontend && npm install
+
+# Sync backend deps (faster than install, uses lockfile)
+sync:
+    cd backend && uv pip sync
 
 # Create .env file from example
 setup-env:
@@ -38,9 +43,9 @@ setup-env:
 # DEVELOPMENT
 # ============================================
 
-# Run both frontend and backend in development mode (requires 2 terminals or use 'just dev-all')
+# Run both frontend and backend in development mode
 dev-backend:
-    cd backend && uvicorn app.main:app --reload --port 8000
+    cd backend && uv run uvicorn app.main:app --reload --port 8000
 
 dev-frontend:
     cd frontend && npm run dev
@@ -51,7 +56,7 @@ dev:
     set -e
     trap 'kill $(jobs -p) 2>/dev/null' EXIT
     echo "Starting backend on http://localhost:8000..."
-    cd backend && uvicorn app.main:app --reload --port 8000 &
+    cd backend && uv run uvicorn app.main:app --reload --port 8000 &
     sleep 2
     echo "Starting frontend on http://localhost:5173..."
     cd frontend && npm run dev &
@@ -78,7 +83,7 @@ serve:
         just build
     fi
     echo "Serving on http://localhost:8000"
-    cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000
+    cd backend && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 # Serve with more workers (production-like)
 serve-prod workers="4":
@@ -87,7 +92,7 @@ serve-prod workers="4":
         just build
     fi
     echo "Serving on http://localhost:8000 with {{workers}} workers"
-    cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers {{workers}}
+    cd backend && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers {{workers}}
 
 # ============================================
 # DATABASE
@@ -105,30 +110,56 @@ db-reset:
 
 # Run backend tests
 test:
-    cd backend && pytest -v
+    cd backend && uv run pytest -v
 
 # Run backend tests with coverage
 test-cov:
-    cd backend && pytest -v --cov=app --cov-report=term-missing
+    cd backend && uv run pytest -v --cov=app --cov-report=term-missing
 
 # Run specific test file
 test-file file:
-    cd backend && pytest -v {{file}}
+    cd backend && uv run pytest -v {{file}}
 
 # ============================================
-# QUALITY
+# LINTING & FORMATTING (ruff)
 # ============================================
 
-# Run frontend linting
+# Lint backend code
+lint:
+    cd backend && uv run ruff check .
+
+# Lint and auto-fix
+lint-fix:
+    cd backend && uv run ruff check --fix .
+
+# Format backend code
+fmt:
+    cd backend && uv run ruff format .
+
+# Check formatting without changes
+fmt-check:
+    cd backend && uv run ruff format --check .
+
+# Lint frontend
 lint-frontend:
     cd frontend && npm run lint
 
-# Run frontend type checking
+# Type check frontend
 typecheck-frontend:
     cd frontend && npx tsc --noEmit
 
-# Run all checks (lint + typecheck + tests)
-check: lint-frontend typecheck-frontend test
+# ============================================
+# QUALITY (all checks)
+# ============================================
+
+# Run all backend checks (lint + format check + tests)
+check-backend: lint fmt-check test
+
+# Run all frontend checks
+check-frontend: lint-frontend typecheck-frontend
+
+# Run ALL checks (backend + frontend)
+check: check-backend check-frontend
 
 # ============================================
 # DOCKER (optional)
@@ -151,14 +182,14 @@ clean:
     rm -rf frontend/dist
     rm -rf frontend/node_modules/.vite
     rm -rf backend/__pycache__
-    rm -rf backend/app/__pycache__
-    rm -rf backend/app/**/__pycache__
+    rm -rf backend/.pytest_cache
+    rm -rf backend/.ruff_cache
     find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
     find . -type f -name "*.pyc" -delete 2>/dev/null || true
 
 # Show project structure
 tree:
-    @tree -I 'node_modules|__pycache__|.venv|dist|.git' -L 3
+    @tree -I 'node_modules|__pycache__|.venv|dist|.git|.pytest_cache|.ruff_cache' -L 3
 
 # Open in browser
 open:

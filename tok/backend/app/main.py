@@ -5,14 +5,15 @@ A chat application with text-based conversation branching powered by Claude Agen
 
 from contextlib import asynccontextmanager
 from pathlib import Path
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
+from app.api import messages, trees, uploads
 from app.core.config import settings
 from app.core.database import init_db
-from app.api import trees, messages, uploads
 
 # Path to frontend build (when bundled)
 FRONTEND_DIR = Path(__file__).parent.parent.parent.parent / "frontend" / "dist"
