@@ -45,7 +45,7 @@ class StreamEvent:
             "session_id": self.session_id,
             "model": self.model,
         }
-        # Remove None values
+        # Remove None values for cleaner JSON
         data = {k: v for k, v in data.items() if v is not None}
         return f"data: {json.dumps(data)}\n\n"
 
@@ -53,7 +53,6 @@ class StreamEvent:
 class ClaudeService:
     """Service for interacting with Claude via the Agent SDK."""
 
-    # Default tools for chat
     DEFAULT_TOOLS = ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebSearch", "WebFetch"]
 
     def __init__(
@@ -95,7 +94,7 @@ class ClaudeService:
         """Stream a response from Claude.
 
         Args:
-            prompt: The user's message or full context
+            prompt: The formatted prompt string
             session_id: Optional session ID to resume
             cwd: Working directory for file operations
 
@@ -154,41 +153,6 @@ class ClaudeService:
                 content=str(e),
                 is_error=True,
             )
-
-    def build_branch_context(
-        self,
-        conversation_history: list[dict],
-        highlighted_text: str,
-        user_prompt: str,
-    ) -> str:
-        """Build context for a branched conversation.
-
-        Args:
-            conversation_history: List of messages up to the branch point
-            highlighted_text: The text the user highlighted
-            user_prompt: The user's question/prompt about the highlighted text
-
-        Returns:
-            Formatted prompt string for Claude
-        """
-        # Build conversation context
-        context_parts = []
-
-        for msg in conversation_history:
-            role = msg.get("role", "user")
-            content = msg.get("content", "")
-            if role == "user":
-                context_parts.append(f"User: {content}")
-            else:
-                context_parts.append(f"Assistant: {content}")
-
-        # Add branch indication
-        context_parts.append("\n--- BRANCH POINT ---")
-        context_parts.append(f"The user has highlighted the following text from the previous response:")
-        context_parts.append(f'"{highlighted_text}"')
-        context_parts.append(f"\nUser's question about this text: {user_prompt}")
-
-        return "\n\n".join(context_parts)
 
 
 # Default service instance

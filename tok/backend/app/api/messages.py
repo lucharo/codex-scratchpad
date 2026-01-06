@@ -2,78 +2,31 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
-from app.models import Tree, Branch, Message, ToolCall
+from app.models import Branch, Message, ToolCall
 from app.api.schemas import MessageCreate, MessageResponse
-from app.services.claude_service import claude_service, StreamEvent
+from app.services.claude_service import claude_service
+from app.services.context import (
+    MessageContext,
+    BranchOriginContext,
+    build_branch_context,
+    build_linear_context,
+    build_prompt_from_context,
+)
 
 router = APIRouter(prefix="/trees/{tree_id}/branches/{branch_id}/messages", tags=["messages"])
 
 
-async def build_conversation_context(
+async def _get_branch_or_404(
     db: AsyncSession,
-    branch: Branch,
-    include_branch_origin: bool = True,
-) -> list[dict]:
-    """Build conversation history for context.
-
-    For branched conversations, this includes:
-    1. All messages from parent branches up to the branch point
-    2. The branch origin (highlighted text + prompt)
-    3. All messages in the current branch
-    """
-    context = []
-
-    # If this is a branched conversation, get parent context
-    if branch.origin:
-        # Get parent branch messages up to the source message
-        parent_stmt = (
-            select(Message)
-            .where(Message.branch_id == branch.origin.source_branch_id)
-            .order_by(Message.position)
-        )
-        parent_result = await db.execute(parent_stmt)
-        parent_messages = parent_result.scalars().all()
-
-        for msg in parent_messages:
-            context.append({
-                "role": msg.role,
-                "content": msg.content,
-            })
-            # Stop after the source message
-            if msg.id == branch.origin.source_message_id:
-                break
-
-        # Add branch origin context if requested
-        if include_branch_origin:
-            context.append({
-                "role": "system",
-                "content": f"[BRANCH POINT: User highlighted the following text]\n\n\"{branch.origin.highlighted_text}\"\n\n[User's question about this text]: {branch.origin.user_prompt}",
-            })
-
-    # Add messages from current branch
-    for msg in branch.messages:
-        context.append({
-            "role": msg.role,
-            "content": msg.content,
-        })
-
-    return context
-
-
-@router.post("")
-async def send_message(
     tree_id: str,
     branch_id: str,
-    message_in: MessageCreate,
-    db: AsyncSession = Depends(get_db),
-):
-    """Send a message and stream the response."""
-    # Verify branch exists and belongs to tree
+) -> Branch:
+    """Fetch branch with messages and origin, or raise 404."""
     stmt = (
         select(Branch)
         .where(Branch.id == branch_id)
@@ -89,7 +42,66 @@ async def send_message(
     if not branch:
         raise HTTPException(status_code=404, detail="Branch not found")
 
-    # Calculate next position
+    return branch
+
+
+async def _fetch_parent_messages(
+    db: AsyncSession,
+    source_branch_id: str,
+    source_message_id: str,
+) -> list[MessageContext]:
+    """Fetch parent branch messages up to source message."""
+    stmt = (
+        select(Message)
+        .where(Message.branch_id == source_branch_id)
+        .order_by(Message.position)
+    )
+    result = await db.execute(stmt)
+    parent_messages = result.scalars().all()
+
+    context = []
+    for msg in parent_messages:
+        context.append(MessageContext(role=msg.role, content=msg.content))
+        if msg.id == source_message_id:
+            break
+
+    return context
+
+
+async def _build_context_for_branch(db: AsyncSession, branch: Branch) -> list[MessageContext]:
+    """Build conversation context for a branch."""
+    current_messages = [
+        MessageContext(role=msg.role, content=msg.content)
+        for msg in branch.messages
+    ]
+
+    if branch.origin:
+        parent_messages = await _fetch_parent_messages(
+            db,
+            branch.origin.source_branch_id,
+            branch.origin.source_message_id,
+        )
+        return build_branch_context(
+            parent_messages=parent_messages,
+            origin=BranchOriginContext(
+                highlighted_text=branch.origin.highlighted_text,
+                user_prompt=branch.origin.user_prompt,
+            ),
+            current_messages=current_messages,
+        )
+
+    return build_linear_context(current_messages)
+
+
+@router.post("")
+async def send_message(
+    tree_id: str,
+    branch_id: str,
+    message_in: MessageCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Send a message and stream the response."""
+    branch = await _get_branch_or_404(db, tree_id, branch_id)
     next_position = len(branch.messages)
 
     # Create user message
@@ -103,23 +115,11 @@ async def send_message(
     await db.commit()
     await db.refresh(user_message)
 
-    # Build context
+    # Rebuild context with new message
     await db.refresh(branch, ["messages", "origin"])
-    context = await build_conversation_context(db, branch)
+    context = await _build_context_for_branch(db, branch)
+    prompt = build_prompt_from_context(context)
 
-    # Build prompt from context
-    prompt_parts = []
-    for msg in context:
-        if msg["role"] == "user":
-            prompt_parts.append(f"User: {msg['content']}")
-        elif msg["role"] == "assistant":
-            prompt_parts.append(f"Assistant: {msg['content']}")
-        else:
-            prompt_parts.append(msg["content"])  # System messages
-
-    prompt = "\n\n".join(prompt_parts)
-
-    # Stream response
     async def generate():
         collected_text = ""
         collected_thinking = ""
@@ -128,10 +128,8 @@ async def send_message(
         model = None
 
         async for event in claude_service.stream_response(prompt):
-            # Send SSE event to client
             yield event.to_sse()
 
-            # Collect response parts
             if event.type == "text":
                 collected_text += event.content or ""
                 model = event.model
@@ -142,46 +140,40 @@ async def send_message(
                     "name": event.tool_name,
                     "input": event.tool_input,
                 })
-            elif event.type == "tool_result":
-                # Match to last tool call
-                if collected_tool_calls:
-                    collected_tool_calls[-1]["result"] = event.tool_result
-                    collected_tool_calls[-1]["is_error"] = event.is_error
+            elif event.type == "tool_result" and collected_tool_calls:
+                collected_tool_calls[-1]["result"] = event.tool_result
+                collected_tool_calls[-1]["is_error"] = event.is_error
             elif event.type == "complete":
                 session_id = event.session_id
 
-        # Save assistant message to database
+        # Save assistant message
         async with db.begin():
             assistant_message = Message(
                 branch_id=branch_id,
                 role="assistant",
                 content=collected_text,
-                thinking=collected_thinking if collected_thinking else None,
+                thinking=collected_thinking or None,
                 position=next_position + 1,
                 model=model,
             )
             db.add(assistant_message)
             await db.flush()
 
-            # Save tool calls
             for tc in collected_tool_calls:
-                tool_call = ToolCall(
+                db.add(ToolCall(
                     message_id=assistant_message.id,
                     tool_use_id=f"tool_{assistant_message.id}_{len(collected_tool_calls)}",
                     name=tc["name"],
                     input_data=tc.get("input", {}),
                     result=tc.get("result"),
                     is_error=tc.get("is_error", False),
-                )
-                db.add(tool_call)
+                ))
 
-            # Update branch session_id
             if session_id:
                 branch_update = await db.get(Branch, branch_id)
                 if branch_update:
                     branch_update.session_id = session_id
 
-        # Send final message with saved message ID
         yield f"data: {{\"type\": \"saved\", \"message_id\": \"{assistant_message.id}\"}}\n\n"
 
     return StreamingResponse(
@@ -202,17 +194,8 @@ async def list_messages(
     db: AsyncSession = Depends(get_db),
 ):
     """List all messages in a branch."""
-    # Verify branch exists
-    branch_stmt = (
-        select(Branch)
-        .where(Branch.id == branch_id)
-        .where(Branch.tree_id == tree_id)
-    )
-    branch_result = await db.execute(branch_stmt)
-    if not branch_result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Branch not found")
+    await _get_branch_or_404(db, tree_id, branch_id)
 
-    # Get messages
     stmt = (
         select(Message)
         .where(Message.branch_id == branch_id)
@@ -223,9 +206,7 @@ async def list_messages(
         .order_by(Message.position)
     )
     result = await db.execute(stmt)
-    messages = result.scalars().all()
-
-    return messages
+    return result.scalars().all()
 
 
 @router.get("/{message_id}", response_model=MessageResponse)
@@ -236,6 +217,8 @@ async def get_message(
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific message."""
+    await _get_branch_or_404(db, tree_id, branch_id)
+
     stmt = (
         select(Message)
         .where(Message.id == message_id)
@@ -250,11 +233,5 @@ async def get_message(
 
     if not message:
         raise HTTPException(status_code=404, detail="Message not found")
-
-    # Verify branch belongs to tree
-    branch_stmt = select(Branch).where(Branch.id == branch_id).where(Branch.tree_id == tree_id)
-    branch_result = await db.execute(branch_stmt)
-    if not branch_result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Branch not found")
 
     return message

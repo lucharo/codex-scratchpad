@@ -100,6 +100,22 @@ db-reset:
     @echo "Database will be recreated on next startup."
 
 # ============================================
+# TESTING
+# ============================================
+
+# Run backend tests
+test:
+    cd backend && pytest -v
+
+# Run backend tests with coverage
+test-cov:
+    cd backend && pytest -v --cov=app --cov-report=term-missing
+
+# Run specific test file
+test-file file:
+    cd backend && pytest -v {{file}}
+
+# ============================================
 # QUALITY
 # ============================================
 
@@ -111,12 +127,8 @@ lint-frontend:
 typecheck-frontend:
     cd frontend && npx tsc --noEmit
 
-# Run backend tests
-test-backend:
-    cd backend && pytest
-
-# Run all checks
-check: lint-frontend typecheck-frontend
+# Run all checks (lint + typecheck + tests)
+check: lint-frontend typecheck-frontend test
 
 # ============================================
 # DOCKER (optional)

@@ -1,5 +1,4 @@
 from pydantic_settings import BaseSettings
-from pydantic import field_validator
 from pathlib import Path
 from platformdirs import user_data_dir
 
@@ -44,7 +43,6 @@ class Settings(BaseSettings):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # Set defaults after init if not provided
         if not self.database_url:
             self.database_url = get_default_database_url()
         if self.upload_dir == Path(""):
@@ -61,5 +59,5 @@ settings = Settings()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 settings.upload_dir.mkdir(parents=True, exist_ok=True)
 
-# Log the data location on import (helpful for debugging)
+# Log the data location on import
 print(f"ToK data directory: {DATA_DIR}")
