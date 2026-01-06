@@ -4,9 +4,13 @@
   "description": "Visualize how frequently each line has been modified in git history - like worn knobs on a control panel",
   "version": "0.1.0",
   "publisher": "line-churn",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/example/vscode-line-churn"
+  },
+  "bugs": {
+    "url": "https://github.com/example/vscode-line-churn/issues"
   },
   "engines": {
     "vscode": "^1.74.0"
@@ -20,11 +24,10 @@
     "churn",
     "history",
     "visualization",
-    "code-analysis"
+    "code-analysis",
+    "code-quality"
   ],
-  "activationEvents": [
-    "onLanguage:*"
-  ],
+  "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
@@ -35,6 +38,10 @@
       {
         "command": "lineChurn.refresh",
         "title": "Line Churn: Refresh Data"
+      },
+      {
+        "command": "lineChurn.showLineHistory",
+        "title": "Line Churn: Show Line History"
       }
     ],
     "configuration": {
@@ -87,20 +94,42 @@
           "description": "Minimum line length (trimmed) to consider for churn analysis. Short lines like 'pass' or '}' can have inflated counts."
         }
       }
+    },
+    "menus": {
+      "editor/context": [
+        {
+          "command": "lineChurn.showLineHistory",
+          "when": "editorTextFocus",
+          "group": "navigation"
+        }
+      ]
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run compile && npm run lint",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "lint": "eslint src --ext ts"
+    "lint": "eslint src --ext ts",
+    "lint:fix": "eslint src --ext ts --fix",
+    "pretest": "npm run compile",
+    "test": "node ./out/test/runTest.js",
+    "test:unit": "mocha --require ts-node/register 'src/test/unit/**/*.test.ts'",
+    "package": "vsce package",
+    "clean": "rm -rf out/"
   },
   "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.6",
     "@types/node": "^18.0.0",
     "@types/vscode": "^1.74.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
+    "@vscode/test-electron": "^2.3.8",
+    "@vscode/vsce": "^2.22.0",
     "eslint": "^8.45.0",
+    "glob": "^10.3.10",
+    "mocha": "^10.2.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5.0.0"
   }
 }
