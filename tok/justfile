@@ -152,6 +152,9 @@ typecheck-frontend:
 # QUALITY (all checks)
 # ============================================
 
+# Pre-commit check (alias for check-backend)
+prek: lint fmt-check test
+
 # Run all backend checks (lint + format check + tests)
 check-backend: lint fmt-check test
 
