@@ -1,314 +1,166 @@
 /**
- * Line Churn VS Code Extension - Main Entry Point
- *
- * Visualizes how frequently each line of code has been modified
- * throughout git history, like worn knobs on a control panel.
+ * Line Churn VS Code Extension
+ * Visualize how frequently each line has been modified in git history.
  */
 
 import * as vscode from 'vscode';
-import { analyzeFile } from './churnAnalyzer';
-import { DecorationProvider } from './decorationProvider';
-import { CacheManager } from './cacheManager';
-import { getConfig, setConfig, affectsLineChurn } from './config';
-import { ChurnData, AnalysisError, AnalysisErrorType } from './types';
+import { analyzeFile, ChurnResult } from './analyzer';
 
-/** Extension state */
-let cache: CacheManager;
-let decorationProvider: DecorationProvider;
-let statusBarItem: vscode.StatusBarItem;
-let outputChannel: vscode.OutputChannel;
+// Simple cache: filepath -> { data, timestamp }
+const cache = new Map<string, { data: ChurnResult; time: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-/** Pending analysis for debouncing */
-let pendingAnalysis: NodeJS.Timeout | null = null;
-const DEBOUNCE_MS = 300;
+// Decoration types for each intensity bucket
+let decorations: vscode.TextEditorDecorationType[] = [];
 
-/**
- * Extension activation.
- */
 export function activate(context: vscode.ExtensionContext): void {
-    // Initialize components
-    cache = new CacheManager();
-    decorationProvider = new DecorationProvider();
-    outputChannel = vscode.window.createOutputChannel('Line Churn');
-
-    // Create status bar item
-    statusBarItem = vscode.window.createStatusBarItem(
-        vscode.StatusBarAlignment.Right,
-        100
-    );
-    statusBarItem.command = 'lineChurn.toggle';
-    statusBarItem.tooltip = 'Click to toggle Line Churn visualization';
-
-    // Register disposables
+    // Commands
     context.subscriptions.push(
-        cache,
-        decorationProvider,
-        statusBarItem,
-        outputChannel
-    );
-
-    // Register event listeners
-    registerEventListeners(context);
-
-    // Register commands
-    registerCommands(context);
-
-    // Initial update
-    updateStatusBar();
-    if (vscode.window.activeTextEditor) {
-        void scheduleUpdate(vscode.window.activeTextEditor);
-    }
-
-    log('Extension activated');
-}
-
-/**
- * Register event listeners for editor changes.
- */
-function registerEventListeners(context: vscode.ExtensionContext): void {
-    // Update on active editor change
-    context.subscriptions.push(
-        vscode.window.onDidChangeActiveTextEditor((editor) => {
+        vscode.commands.registerCommand('lineChurn.toggle', async () => {
+            const config = vscode.workspace.getConfiguration('lineChurn');
+            const enabled = config.get<boolean>('enabled', true);
+            await config.update('enabled', !enabled, true);
+        }),
+        vscode.commands.registerCommand('lineChurn.refresh', () => {
+            cache.clear();
+            const editor = vscode.window.activeTextEditor;
             if (editor) {
-                void scheduleUpdate(editor);
+                void updateEditor(editor);
             }
         })
     );
 
-    // Invalidate cache and update on file save
+    // Events
     context.subscriptions.push(
-        vscode.workspace.onDidSaveTextDocument((doc) => {
-            cache.invalidate(doc.uri.fsPath);
+        vscode.window.onDidChangeActiveTextEditor(editor => {
+            if (editor) {
+                void updateEditor(editor);
+            }
+        }),
+        vscode.workspace.onDidSaveTextDocument(doc => {
+            cache.delete(doc.uri.fsPath);
             const editor = vscode.window.activeTextEditor;
             if (editor?.document === doc) {
-                void scheduleUpdate(editor);
+                void updateEditor(editor);
             }
-        })
-    );
-
-    // Update on configuration change
-    context.subscriptions.push(
-        vscode.workspace.onDidChangeConfiguration((event) => {
-            if (affectsLineChurn(event)) {
-                cache.clear(); // Config change may affect analysis
-                updateStatusBar();
+        }),
+        vscode.workspace.onDidChangeConfiguration(e => {
+            if (e.affectsConfiguration('lineChurn')) {
+                cache.clear();
                 const editor = vscode.window.activeTextEditor;
                 if (editor) {
-                    void scheduleUpdate(editor);
+                    void updateEditor(editor);
                 }
             }
         })
     );
 
-    // Clear decorations when editor closes
-    context.subscriptions.push(
-        vscode.workspace.onDidCloseTextDocument((doc) => {
-            cache.invalidate(doc.uri.fsPath);
-        })
-    );
-}
-
-/**
- * Register extension commands.
- */
-function registerCommands(context: vscode.ExtensionContext): void {
-    context.subscriptions.push(
-        vscode.commands.registerCommand('lineChurn.toggle', async () => {
-            const config = getConfig();
-            await setConfig('enabled', !config.enabled);
-
-            const editor = vscode.window.activeTextEditor;
-            if (!config.enabled && editor) {
-                // Was disabled, now enabled - update
-                void scheduleUpdate(editor);
-            } else if (config.enabled && editor) {
-                // Was enabled, now disabled - clear
-                decorationProvider.clear(editor);
-            }
-            updateStatusBar();
-        }),
-
-        vscode.commands.registerCommand('lineChurn.refresh', async () => {
-            cache.clear();
-            const editor = vscode.window.activeTextEditor;
-            if (editor) {
-                await updateDecorations(editor, true);
-            }
-        }),
-
-        vscode.commands.registerCommand('lineChurn.showLineHistory', () => {
-            const editor = vscode.window.activeTextEditor;
-            if (!editor) {
-                return;
-            }
-
-            const filePath = editor.document.uri.fsPath;
-            const churnData = cache.get(filePath);
-            if (!churnData) {
-                void vscode.window.showInformationMessage(
-                    'No churn data available. Try refreshing first.'
-                );
-                return;
-            }
-
-            const line = editor.selection.active.line;
-            const lineData = churnData.lines[line] as typeof churnData.lines[number] | undefined;
-            if (lineData === undefined) {
-                return;
-            }
-
-            const message = lineData.churnCount > 0
-                ? `Line ${line + 1}: Modified ${lineData.churnCount} times in git history`
-                : `Line ${line + 1}: No modifications found in git history`;
-
-            void vscode.window.showInformationMessage(message);
-        })
-    );
-}
-
-/**
- * Schedule a debounced update for the editor.
- */
-function scheduleUpdate(editor: vscode.TextEditor): void {
-    if (pendingAnalysis) {
-        clearTimeout(pendingAnalysis);
+    // Initial update
+    if (vscode.window.activeTextEditor) {
+        void updateEditor(vscode.window.activeTextEditor);
     }
-
-    pendingAnalysis = setTimeout(() => {
-        pendingAnalysis = null;
-        void updateDecorations(editor, false);
-    }, DEBOUNCE_MS);
 }
 
-/**
- * Update decorations for an editor.
- */
-async function updateDecorations(
-    editor: vscode.TextEditor,
-    forceRefresh: boolean
-): Promise<void> {
-    const config = getConfig();
-
-    // Check if disabled
-    if (!config.enabled) {
-        decorationProvider.clear(editor);
-        updateStatusBar();
+async function updateEditor(editor: vscode.TextEditor): Promise<void> {
+    const config = vscode.workspace.getConfiguration('lineChurn');
+    if (!config.get<boolean>('enabled', true)) {
+        clearDecorations(editor);
         return;
     }
 
-    // Skip non-file URIs
     if (editor.document.uri.scheme !== 'file') {
-        decorationProvider.clear(editor);
-        statusBarItem.text = '$(flame) Churn: N/A';
-        statusBarItem.show();
+        clearDecorations(editor);
         return;
     }
 
     const filePath = editor.document.uri.fsPath;
 
-    // Check cache first (unless forced refresh)
-    let churnData: ChurnData | null = null;
-    if (!forceRefresh) {
-        churnData = cache.get(filePath);
+    // Check cache
+    const cached = cache.get(filePath);
+    if (cached && Date.now() - cached.time < CACHE_TTL) {
+        applyDecorations(editor, cached.data, config);
+        return;
     }
 
-    // Analyze if not cached
-    if (!churnData) {
-        statusBarItem.text = '$(sync~spin) Analyzing...';
-        statusBarItem.show();
+    // Analyze
+    const result = await analyzeFile(filePath);
+    if (!result) {
+        clearDecorations(editor);
+        return;
+    }
 
-        const result = await analyzeFile(filePath);
+    cache.set(filePath, { data: result, time: Date.now() });
+    applyDecorations(editor, result, config);
+}
 
-        if (result.success) {
-            churnData = result.value;
-            cache.set(filePath, churnData);
-        } else {
-            handleAnalysisError(result.error);
-            decorationProvider.clear(editor);
-            return;
+function applyDecorations(
+    editor: vscode.TextEditor,
+    data: ChurnResult,
+    config: vscode.WorkspaceConfiguration
+): void {
+    clearDecorations(editor);
+
+    const maxOpacity = config.get<number>('maxOpacity', 0.3);
+    const scheme = config.get<string>('colorScheme', 'heat');
+    const buckets = 10;
+
+    // Group lines by intensity bucket
+    const groups: number[][] = Array.from({ length: buckets }, () => []);
+    for (const line of data.lines) {
+        if (line.count === 0) {
+            continue;
         }
+        const bucket = Math.min(Math.floor(line.normalized * buckets), buckets - 1);
+        groups[bucket].push(line.line);
     }
 
-    // Apply decorations
-    decorationProvider.apply(editor, churnData);
+    // Create decoration for each bucket
+    for (let i = 0; i < buckets; i++) {
+        if (groups[i].length === 0) {
+            continue;
+        }
 
-    // Update status bar
-    statusBarItem.text = `$(flame) Churn: ${churnData.maxChurn} max`;
-    statusBarItem.tooltip = [
-        'Line Churn Analysis',
-        `Max churn: ${churnData.maxChurn}`,
-        `Lines: ${churnData.lines.length}`,
-        `Analyzed: ${churnData.analyzedAt.toLocaleTimeString()}`,
-        '',
-        'Click to toggle',
-    ].join('\n');
-    statusBarItem.show();
-}
+        const intensity = i / (buckets - 1);
+        const color = getColor(intensity, scheme, maxOpacity);
 
-/**
- * Handle analysis errors with appropriate user feedback.
- */
-function handleAnalysisError(error: AnalysisError): void {
-    log(`Analysis error: ${error.type} - ${error.message}`);
+        const type = vscode.window.createTextEditorDecorationType({
+            backgroundColor: color,
+            isWholeLine: true,
+        });
+        decorations.push(type);
 
-    switch (error.type) {
-        case AnalysisErrorType.NotGitRepository:
-            statusBarItem.text = '$(flame) Churn: No Git';
-            statusBarItem.tooltip = 'File is not in a git repository';
-            break;
-
-        case AnalysisErrorType.FileNotTracked:
-            statusBarItem.text = '$(flame) Churn: Untracked';
-            statusBarItem.tooltip = 'File is not tracked by git';
-            break;
-
-        case AnalysisErrorType.Timeout:
-            statusBarItem.text = '$(warning) Churn: Timeout';
-            statusBarItem.tooltip = 'Analysis timed out. Try reducing commit limit in settings.';
-            void vscode.window.showWarningMessage(
-                'Line Churn analysis timed out. Try reducing lineChurn.commitLimit in settings.'
-            );
-            break;
-
-        default:
-            statusBarItem.text = '$(warning) Churn: Error';
-            statusBarItem.tooltip = error.message;
+        const ranges = groups[i].map(line =>
+            new vscode.Range(line, 0, line, 0)
+        );
+        editor.setDecorations(type, ranges);
     }
-
-    statusBarItem.show();
 }
 
-/**
- * Update status bar based on current configuration.
- */
-function updateStatusBar(): void {
-    const config = getConfig();
+function getColor(intensity: number, scheme: string, maxOpacity: number): string {
+    const opacity = intensity * maxOpacity;
 
-    if (config.enabled) {
-        statusBarItem.text = '$(flame) Churn';
-        statusBarItem.tooltip = 'Line Churn visualization enabled. Click to disable.';
-    } else {
-        statusBarItem.text = '$(eye-closed) Churn: Off';
-        statusBarItem.tooltip = 'Line Churn visualization disabled. Click to enable.';
+    if (scheme === 'blue') {
+        const b = Math.round(100 + 155 * intensity);
+        return `rgba(50, 100, ${b}, ${opacity})`;
     }
-
-    statusBarItem.show();
+    if (scheme === 'mono') {
+        const g = Math.round(200 - 150 * intensity);
+        return `rgba(${g}, ${g}, ${g}, ${opacity})`;
+    }
+    // heat (default): green -> yellow -> red
+    const r = Math.round(255 * Math.min(intensity * 2, 1));
+    const g = Math.round(255 * Math.min((1 - intensity) * 2, 1));
+    return `rgba(${r}, ${g}, 50, ${opacity})`;
 }
 
-/**
- * Log a message to the output channel.
- */
-function log(message: string): void {
-    const timestamp = new Date().toISOString();
-    outputChannel.appendLine(`[${timestamp}] ${message}`);
+function clearDecorations(editor: vscode.TextEditor): void {
+    for (const d of decorations) {
+        editor.setDecorations(d, []);
+        d.dispose();
+    }
+    decorations = [];
 }
 
-/**
- * Extension deactivation.
- */
 export function deactivate(): void {
-    if (pendingAnalysis) {
-        clearTimeout(pendingAnalysis);
-    }
-    log('Extension deactivated');
+    cache.clear();
 }
