@@ -2,8 +2,7 @@
  * Worn Out Lines - GitHub Chrome Extension
  * Highlights lines based on how frequently they've been modified.
  *
- * Rate limits: 60/hr without token, 5000/hr with token
- * Set token via: chrome.storage.sync.set({ githubToken: 'your_token' })
+ * Public repos only. Rate limit: 60 requests/hour.
  */
 
 (async function() {
@@ -25,91 +24,81 @@
   showStatus('Analyzing churn...');
 
   try {
-    const token = await getToken();
-    const churn = await analyzeChurn(owner, repo, filePath, token);
+    const churn = await analyzeChurn(owner, repo, filePath);
     if (churn) {
       await setCache(cacheKey, churn);
       applyChurn(churn);
       showStatus(`Max churn: ${churn.maxChurn}`, 3000);
+    } else {
+      showStatus('No history found', 3000);
     }
   } catch (err) {
-    console.error('Worn Out Lines error:', err);
-    showStatus('Error: ' + err.message, 5000);
+    console.error('Worn Out Lines:', err);
+    showStatus(err.message, 5000);
   }
 })();
 
-async function analyzeChurn(owner, repo, filePath, token) {
-  const headers = token ? { Authorization: `token ${token}` } : {};
-
-  // Get commits for this file
+async function analyzeChurn(owner, repo, filePath) {
   const commitsUrl = `https://api.github.com/repos/${owner}/${repo}/commits?path=${encodeURIComponent(filePath)}&per_page=100`;
-  const commitsRes = await fetch(commitsUrl, { headers });
+  const commitsRes = await fetch(commitsUrl);
 
-  if (!commitsRes.ok) {
-    if (commitsRes.status === 403) throw new Error('Rate limited - add GitHub token');
-    throw new Error(`API error: ${commitsRes.status}`);
-  }
+  if (commitsRes.status === 403) throw new Error('Rate limited (60/hr)');
+  if (commitsRes.status === 404) throw new Error('Private repo or not found');
+  if (!commitsRes.ok) throw new Error(`API error: ${commitsRes.status}`);
 
   const commits = await commitsRes.json();
-  if (commits.length === 0) return null;
+  if (!commits.length) return null;
 
   // Fetch diffs (limit to 30 commits)
   const diffs = [];
   for (let i = 0; i < Math.min(commits.length, 30); i++) {
-    const diffRes = await fetch(
+    const res = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/commits/${commits[i].sha}`,
-      { headers: { ...headers, Accept: 'application/vnd.github.v3.diff' } }
+      { headers: { Accept: 'application/vnd.github.v3.diff' } }
     );
-    if (diffRes.ok) diffs.push(await diffRes.text());
-    await sleep(50);
+    if (res.ok) diffs.push(await res.text());
+    await new Promise(r => setTimeout(r, 50));
   }
 
   const diffHistory = diffs.join('\n');
-  const lines = getCurrentLines();
+  const lines = getLines();
   if (!lines) return null;
 
-  // Count churn
-  const churnData = [];
+  // Count churn per line
   let maxChurn = 0;
-
-  for (let i = 0; i < lines.length; i++) {
-    const content = lines[i].trim();
-    const count = content.length >= 3 ? countInDiffs(content, diffHistory) : 0;
+  const data = lines.map((content, i) => {
+    const trimmed = content.trim();
+    const count = trimmed.length >= 3 ? countInDiffs(trimmed, diffHistory) : 0;
     maxChurn = Math.max(maxChurn, count);
-    churnData.push({ line: i, count, normalized: 0 });
-  }
+    return { line: i, count, normalized: 0 };
+  });
 
-  if (maxChurn > 0) {
-    for (const d of churnData) d.normalized = d.count / maxChurn;
-  }
+  if (maxChurn > 0) data.forEach(d => d.normalized = d.count / maxChurn);
 
-  return { lines: churnData, maxChurn };
+  return { lines: data, maxChurn };
 }
 
 function countInDiffs(line, diffs) {
-  if (!line) return 0;
   const esc = line.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const adds = (diffs.match(new RegExp(`\\n\\+${esc}(?=\\n|$)`, 'g')) || []).length;
   const dels = (diffs.match(new RegExp(`\\n-${esc}(?=\\n|$)`, 'g')) || []).length;
   return adds + dels;
 }
 
-function getCurrentLines() {
-  // New GitHub UI
+function getLines() {
   let els = document.querySelectorAll('.react-code-lines .react-code-text');
   if (els.length) return Array.from(els).map(e => e.textContent || '');
-  // Classic UI
   els = document.querySelectorAll('.blob-code-inner');
   if (els.length) return Array.from(els).map(e => e.textContent || '');
   return null;
 }
 
-function applyChurn(data) {
+function applyChurn({ lines }) {
   let rows = document.querySelectorAll('.react-code-lines > div');
   if (!rows.length) rows = document.querySelectorAll('tr.js-file-line');
 
-  for (const { line, count, normalized } of data.lines) {
-    if (count === 0 || !rows[line]) continue;
+  for (const { line, count, normalized } of lines) {
+    if (!count || !rows[line]) continue;
     const r = Math.round(255 * Math.min(normalized * 2, 1));
     const g = Math.round(255 * Math.min((1 - normalized) * 2, 1));
     rows[line].style.backgroundColor = `rgba(${r}, ${g}, 50, ${normalized * 0.3})`;
@@ -117,33 +106,25 @@ function applyChurn(data) {
 }
 
 function showStatus(msg, duration = 0) {
-  let el = document.getElementById('worn-out-lines-status');
+  let el = document.getElementById('wol-status');
   if (!el) {
     el = document.createElement('div');
-    el.id = 'worn-out-lines-status';
-    el.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#24292e;color:#fff;padding:8px 16px;border-radius:6px;font-size:14px;z-index:9999';
+    el.id = 'wol-status';
+    el.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#24292e;color:#fff;padding:8px 16px;border-radius:6px;z-index:9999;font:14px system-ui';
     document.body.appendChild(el);
   }
   el.textContent = msg;
   el.style.display = 'block';
-  if (duration > 0) setTimeout(() => el.style.display = 'none', duration);
+  if (duration) setTimeout(() => el.style.display = 'none', duration);
 }
 
-async function getToken() {
-  return new Promise(r => chrome.storage.sync.get('githubToken', res => r(res.githubToken)));
-}
+const getCache = key => new Promise(r =>
+  chrome.storage.local.get(key, res => {
+    const item = res[key];
+    r(item && Date.now() - item.time < 3600000 ? item.data : null);
+  })
+);
 
-async function getCache(key) {
-  return new Promise(r => {
-    chrome.storage.local.get(key, res => {
-      const item = res[key];
-      r(item && Date.now() - item.time < 3600000 ? item.data : null);
-    });
-  });
-}
-
-async function setCache(key, data) {
-  return new Promise(r => chrome.storage.local.set({ [key]: { data, time: Date.now() } }, r));
-}
-
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+const setCache = (key, data) => new Promise(r =>
+  chrome.storage.local.set({ [key]: { data, time: Date.now() } }, r)
+);
