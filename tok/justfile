@@ -1,0 +1,159 @@
+# Tree of Knowledge - Development & Deployment Commands
+# Install just: https://github.com/casey/just
+
+# Default recipe - show available commands
+default:
+    @just --list
+
+# ============================================
+# SETUP
+# ============================================
+
+# Install all dependencies (backend + frontend)
+install:
+    @echo "Installing backend dependencies..."
+    cd backend && pip install -e ".[dev]"
+    @echo "Installing frontend dependencies..."
+    cd frontend && npm install
+    @echo "Done! Run 'just dev' to start development servers."
+
+# Install backend only
+install-backend:
+    cd backend && pip install -e ".[dev]"
+
+# Install frontend only
+install-frontend:
+    cd frontend && npm install
+
+# Create .env file from example
+setup-env:
+    @if [ ! -f backend/.env ]; then \
+        cp backend/.env.example backend/.env; \
+        echo "Created backend/.env - please add your ANTHROPIC_API_KEY"; \
+    else \
+        echo "backend/.env already exists"; \
+    fi
+
+# ============================================
+# DEVELOPMENT
+# ============================================
+
+# Run both frontend and backend in development mode (requires 2 terminals or use 'just dev-all')
+dev-backend:
+    cd backend && uvicorn app.main:app --reload --port 8000
+
+dev-frontend:
+    cd frontend && npm run dev
+
+# Run both servers (using background processes - Ctrl+C to stop both)
+dev:
+    #!/usr/bin/env bash
+    set -e
+    trap 'kill $(jobs -p) 2>/dev/null' EXIT
+    echo "Starting backend on http://localhost:8000..."
+    cd backend && uvicorn app.main:app --reload --port 8000 &
+    sleep 2
+    echo "Starting frontend on http://localhost:5173..."
+    cd frontend && npm run dev &
+    wait
+
+# ============================================
+# PRODUCTION BUILD
+# ============================================
+
+# Build frontend for production
+build-frontend:
+    cd frontend && npm run build
+
+# Build and bundle everything (frontend static files served by backend)
+build: build-frontend
+    @echo "Frontend built to frontend/dist/"
+    @echo "To serve: just serve"
+
+# Serve production build
+serve:
+    #!/usr/bin/env bash
+    if [ ! -d "frontend/dist" ]; then
+        echo "No build found. Running 'just build' first..."
+        just build
+    fi
+    echo "Serving on http://localhost:8000"
+    cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# Serve with more workers (production-like)
+serve-prod workers="4":
+    #!/usr/bin/env bash
+    if [ ! -d "frontend/dist" ]; then
+        just build
+    fi
+    echo "Serving on http://localhost:8000 with {{workers}} workers"
+    cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers {{workers}}
+
+# ============================================
+# DATABASE
+# ============================================
+
+# Reset database (delete and recreate)
+db-reset:
+    @echo "Resetting database..."
+    rm -f backend/tok.db
+    @echo "Database will be recreated on next startup."
+
+# ============================================
+# QUALITY
+# ============================================
+
+# Run frontend linting
+lint-frontend:
+    cd frontend && npm run lint
+
+# Run frontend type checking
+typecheck-frontend:
+    cd frontend && npx tsc --noEmit
+
+# Run backend tests
+test-backend:
+    cd backend && pytest
+
+# Run all checks
+check: lint-frontend typecheck-frontend
+
+# ============================================
+# DOCKER (optional)
+# ============================================
+
+# Build Docker image
+docker-build:
+    docker build -t tok:latest .
+
+# Run in Docker
+docker-run:
+    docker run -p 8000:8000 -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" tok:latest
+
+# ============================================
+# UTILITIES
+# ============================================
+
+# Clean build artifacts
+clean:
+    rm -rf frontend/dist
+    rm -rf frontend/node_modules/.vite
+    rm -rf backend/__pycache__
+    rm -rf backend/app/__pycache__
+    rm -rf backend/app/**/__pycache__
+    find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    find . -type f -name "*.pyc" -delete 2>/dev/null || true
+
+# Show project structure
+tree:
+    @tree -I 'node_modules|__pycache__|.venv|dist|.git' -L 3
+
+# Open in browser
+open:
+    @if command -v xdg-open &> /dev/null; then \
+        xdg-open http://localhost:5173; \
+    elif command -v open &> /dev/null; then \
+        open http://localhost:5173; \
+    else \
+        echo "Open http://localhost:5173 in your browser"; \
+    fi
