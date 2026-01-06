@@ -1,0 +1,12 @@
+#line-churn-status {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: #24292e;
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  z-index: 9999;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
