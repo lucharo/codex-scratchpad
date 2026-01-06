@@ -1,0 +1,106 @@
+{
+  "name": "line-churn",
+  "displayName": "Line Churn - Worn Knobs",
+  "description": "Visualize how frequently each line has been modified in git history - like worn knobs on a control panel",
+  "version": "0.1.0",
+  "publisher": "line-churn",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/example/vscode-line-churn"
+  },
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "git",
+    "churn",
+    "history",
+    "visualization",
+    "code-analysis"
+  ],
+  "activationEvents": [
+    "onLanguage:*"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "lineChurn.toggle",
+        "title": "Line Churn: Toggle Visualization"
+      },
+      {
+        "command": "lineChurn.refresh",
+        "title": "Line Churn: Refresh Data"
+      }
+    ],
+    "configuration": {
+      "title": "Line Churn",
+      "properties": {
+        "lineChurn.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable line churn visualization"
+        },
+        "lineChurn.style": {
+          "type": "string",
+          "enum": [
+            "gutter",
+            "background",
+            "both"
+          ],
+          "default": "background",
+          "description": "How to display churn: gutter icons, background color, or both"
+        },
+        "lineChurn.maxOpacity": {
+          "type": "number",
+          "default": 0.3,
+          "minimum": 0.1,
+          "maximum": 0.8,
+          "description": "Maximum background opacity for high-churn lines"
+        },
+        "lineChurn.colorScheme": {
+          "type": "string",
+          "enum": [
+            "heat",
+            "blue",
+            "mono"
+          ],
+          "default": "heat",
+          "description": "Color scheme: heat (green→red), blue (light→dark), mono (grayscale)"
+        },
+        "lineChurn.commitLimit": {
+          "type": "number",
+          "default": 500,
+          "minimum": 50,
+          "maximum": 5000,
+          "description": "Maximum number of commits to analyze (for large repos)"
+        },
+        "lineChurn.minLineLength": {
+          "type": "number",
+          "default": 3,
+          "minimum": 0,
+          "maximum": 20,
+          "description": "Minimum line length (trimmed) to consider for churn analysis. Short lines like 'pass' or '}' can have inflated counts."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.74.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.45.0",
+    "typescript": "^5.0.0"
+  }
+}
