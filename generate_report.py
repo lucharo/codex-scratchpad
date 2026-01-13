@@ -451,6 +451,26 @@ html_content = f'''<!DOCTYPE html>
             <p>Comprehensive Dataset Analysis for Gapmer ASO Design</p>
         </header>
 
+        <!-- TL;DR -->
+        <section id="tldr" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-left: 4px solid #f59e0b;">
+            <h2 style="color: #92400e; border-bottom-color: #fcd34d;">TL;DR</h2>
+            <p style="font-size: 1.1rem; line-height: 1.8;">
+                <strong>ASOptimizer and ASO Atlas are comparable datasets.</strong> Both contain knockdown efficacy measurements,
+                ASO sequences, and chemical modification information. The datasets share 13,779 identical sequences and 11 genes,
+                with a Pearson correlation of 0.54 for efficacy values on overlapping sequences.
+            </p>
+            <p style="font-size: 1.1rem; line-height: 1.8; margin-top: 15px;">
+                <strong>Key difference:</strong> ASO Atlas lacks SMILES molecular structures, which ASOptimizer uses for its
+                graph neural network-based chemical engineering model. However, SMILES can be computationally generated from
+                ASO Atlas's position-level modification data (sequence + modification positions → SMILES) using cheminformatics
+                libraries like RDKit.
+            </p>
+            <p style="font-size: 1.1rem; line-height: 1.8; margin-top: 15px;">
+                <strong>Bottom line:</strong> ASO Atlas could be used to expand ASOptimizer's training data after SMILES generation,
+                or directly for sequence-only models.
+            </p>
+        </section>
+
         <!-- Summary Stats -->
         <div class="stats-grid">
             <div class="stat-card atlas">
