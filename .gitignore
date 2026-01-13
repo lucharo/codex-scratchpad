@@ -1,2 +1,5 @@
 # C2C MCP Server Infrastructure
 .c2c/
+# Cloned external repositories for analysis
+ASOptimizer/
+aso_atlas/
