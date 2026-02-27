@@ -66,6 +66,40 @@ def data_setup():
             554, 715, 406, 726, 631,
             1059, 1993, 2472,
         ],
+        # Bug vs enhancement
+        bug_completed=4_383,
+        bug_closed=9_921,
+        enhancement_completed=1_005,
+        enhancement_closed=2_703,
+        enhancement_duplicate=197,
+        bug_duplicate=1_437,
+        # Regressions
+        regression_total=96,
+        regression_completed=42,
+        # Platform breakdown
+        platform_macos=6_786,
+        platform_macos_completed=2_115,
+        platform_windows=2_857,
+        platform_windows_completed=915,
+        platform_linux=2_563,
+        platform_linux_completed=734,
+        platform_vscode=202,
+        platform_vscode_completed=88,
+        # Area/component breakdown
+        areas={
+            "core": 5_907, "tui": 3_697, "tools": 3_123,
+            "api": 1_778, "ide": 1_388, "mcp": 1_279,
+            "auth": 1_256, "model": 979, "security": 844,
+            "cost": 628, "cli": 144, "permissions": 78,
+            "bash": 69, "agents": 59, "hooks": 48,
+        },
+        # Time-to-close (sampled, hours)
+        ttc_completed_median_h=10.9,
+        ttc_completed_p25_h=0.5,
+        ttc_completed_p75_h=95.3,
+        ttc_duplicate_median_h=85.2,
+        ttc_duplicate_p25_h=80.5,
+        ttc_duplicate_p75_h=90.8,
     )
     return (data,)
 
@@ -421,8 +455,210 @@ Having a repro roughly **doubles** your odds of the issue being resolved vs. the
 
 
 @app.cell
-def q8_summary(mo, data):
-    q8 = mo.md(
+def q8_bugs_vs_enhancements(mo, data):
+    import plotly.graph_objects as _go
+
+    _bug_rate = data["bug_completed"] / data["label_bug"]
+    _enh_rate = data["enhancement_completed"] / data["label_enhancement"]
+    _reg_rate = data["regression_completed"] / data["regression_total"]
+    _bug_dup_rate = data["bug_duplicate"] / data["label_bug"]
+    _enh_dup_rate = data["enhancement_duplicate"] / data["label_enhancement"]
+
+    _fig = _go.Figure()
+    _fig.add_trace(_go.Bar(
+        x=["Bug reports", "Enhancements", "Regressions"],
+        y=[_bug_rate * 100, _enh_rate * 100, _reg_rate * 100],
+        name="Completion rate",
+        marker_color=["#636EFA", "#00CC96", "#FFA15A"],
+        text=[f"{_r:.0%}" for _r in [_bug_rate, _enh_rate, _reg_rate]],
+        textposition="outside",
+    ))
+    _fig.update_layout(
+        title=dict(text="Completion rate by issue type", x=0.5),
+        yaxis=dict(title="% completed", ticksuffix="%"),
+        height=380,
+        margin=dict(t=60, b=30),
+    )
+
+    q8 = mo.vstack([
+        mo.md(
+            f"""
+## Q8 — Are bug reports or feature requests more likely to be actioned?
+
+**Regressions get fixed at the highest rate ({_reg_rate:.0%}), followed by enhancements ({_enh_rate:.0%}), then bugs ({_bug_rate:.0%}).**
+
+| Type | Total | Completed | Rate | Duplicate rate |
+|------|------:|----------:|:----:|:--------------:|
+| Bug | {data['label_bug']:,} | {data['bug_completed']:,} | {_bug_rate:.0%} | {_bug_dup_rate:.0%} |
+| Enhancement | {data['label_enhancement']:,} | {data['enhancement_completed']:,} | {_enh_rate:.0%} | {_enh_dup_rate:.0%} |
+| Regression | {data['regression_total']} | {data['regression_completed']} | {_reg_rate:.0%} | — |
+
+Bugs have a lower completion rate partly because so many are duplicates ({_bug_dup_rate:.0%}).
+Regressions — breakages in existing functionality — are treated with urgency: nearly half get resolved.
+"""
+        ),
+        mo.ui.plotly(_fig),
+    ])
+    return (q8,)
+
+
+@app.cell
+def q9_platforms(mo, data):
+    import plotly.graph_objects as _go
+
+    _platforms = ["macOS", "Windows", "Linux", "VS Code"]
+    _totals = [data["platform_macos"], data["platform_windows"], data["platform_linux"], data["platform_vscode"]]
+    _completed = [data["platform_macos_completed"], data["platform_windows_completed"], data["platform_linux_completed"], data["platform_vscode_completed"]]
+    _rates = [_c / _t for _c, _t in zip(_completed, _totals)]
+
+    _fig = _go.Figure()
+    _fig.add_trace(_go.Bar(
+        x=_platforms, y=_totals, name="Total issues",
+        marker_color="#636EFA", opacity=0.5,
+    ))
+    _fig.add_trace(_go.Bar(
+        x=_platforms, y=_completed, name="Completed",
+        marker_color="#00CC96",
+    ))
+    _fig.add_trace(_go.Scatter(
+        x=_platforms, y=[_r * 100 for _r in _rates],
+        name="Completion %", yaxis="y2",
+        mode="lines+markers",
+        line=dict(color="#EF553B", width=3),
+        marker=dict(size=10),
+    ))
+    _fig.update_layout(
+        title=dict(text="Issues and resolution by platform", x=0.5),
+        barmode="overlay",
+        yaxis=dict(title="Issue count"),
+        yaxis2=dict(title="Completion %", overlaying="y", side="right", range=[0, 60], ticksuffix="%"),
+        height=420,
+        margin=dict(t=60, b=30),
+        legend=dict(orientation="h", y=-0.15),
+    )
+
+    q9 = mo.vstack([
+        mo.md(
+            f"""
+## Q9 — Which platforms generate the most issues, and which get the best resolution?
+
+**macOS dominates issue volume ({_totals[0]:,}), but VS Code issues have the highest completion rate ({_rates[3]:.0%}).**
+
+| Platform | Issues | Completed | Rate |
+|----------|-------:|----------:|:----:|
+| macOS | {_totals[0]:,} | {_completed[0]:,} | {_rates[0]:.0%} |
+| Windows | {_totals[1]:,} | {_completed[1]:,} | {_rates[1]:.0%} |
+| Linux | {_totals[2]:,} | {_completed[2]:,} | {_rates[2]:.0%} |
+| VS Code | {_totals[3]:,} | {_completed[3]:,} | {_rates[3]:.0%} |
+
+macOS has ~2.5x the issue volume of Windows or Linux, reflecting the likely developer-user demographics.
+Resolution rates are remarkably uniform (~29-44%) across platforms.
+"""
+        ),
+        mo.ui.plotly(_fig),
+    ])
+    return (q9,)
+
+
+@app.cell
+def q10_areas(mo, data):
+    import plotly.graph_objects as _go
+
+    _areas = data["areas"]
+    _sorted = sorted(_areas.items(), key=lambda x: x[1], reverse=True)
+    _names = [a[0] for a in _sorted]
+    _counts = [a[1] for a in _sorted]
+
+    _fig = _go.Figure()
+    _fig.add_trace(_go.Bar(
+        x=_names, y=_counts,
+        marker_color="#636EFA",
+        text=[f"{_c:,}" for _c in _counts],
+        textposition="outside",
+    ))
+    _fig.update_layout(
+        title=dict(text="Issue volume by component area", x=0.5),
+        yaxis_title="Issues",
+        height=420,
+        margin=dict(t=60, b=40),
+        xaxis=dict(tickangle=-45),
+    )
+
+    _top3 = _sorted[:3]
+
+    q10 = mo.vstack([
+        mo.md(
+            f"""
+## Q10 — Which parts of claude-code generate the most issues?
+
+**"core" ({_top3[0][1]:,}), "tui" ({_top3[1][1]:,}), and "tools" ({_top3[2][1]:,}) are the three noisiest areas, accounting for the bulk of labelled issues.**
+
+The long tail of smaller areas (hooks, agents, bash, permissions) have very low volumes —
+either they're stable or under-labelled. MCP, auth, and IDE each sit in the 1,200-1,400 range,
+suggesting moderate pain points. Cost ({_areas['cost']:,}) and security ({_areas['security']:,})
+are notable given those are high-sensitivity areas.
+"""
+        ),
+        mo.ui.plotly(_fig),
+    ])
+    return (q10,)
+
+
+@app.cell
+def q11_time_to_close(mo, data):
+    import plotly.graph_objects as _go
+
+    _fig = _go.Figure()
+    _categories = ["Completed", "Duplicate"]
+    _medians = [data["ttc_completed_median_h"], data["ttc_duplicate_median_h"]]
+    _p25s = [data["ttc_completed_p25_h"], data["ttc_duplicate_p25_h"]]
+    _p75s = [data["ttc_completed_p75_h"], data["ttc_duplicate_p75_h"]]
+
+    _fig.add_trace(_go.Bar(
+        x=_categories,
+        y=_medians,
+        marker_color=["#00CC96", "#EF553B"],
+        text=[f"{_m:.0f}h" for _m in _medians],
+        textposition="outside",
+        error_y=dict(
+            type="data",
+            symmetric=False,
+            array=[_p75 - _m for _p75, _m in zip(_p75s, _medians)],
+            arrayminus=[_m - _p25 for _m, _p25 in zip(_medians, _p25s)],
+        ),
+    ))
+    _fig.update_layout(
+        title=dict(text="Median time to close (hours, with IQR)", x=0.5),
+        yaxis_title="Hours",
+        height=380,
+        margin=dict(t=60, b=30),
+    )
+
+    q11 = mo.vstack([
+        mo.md(
+            f"""
+## Q11 — How fast are issues closed?
+
+**Completed issues close surprisingly fast (median ~{data['ttc_completed_median_h']:.0f} hours), while duplicates take ~{data['ttc_duplicate_median_h']:.0f} hours — suggesting a ~3.5 day batch-triage cycle.**
+
+| Outcome | P25 | Median | P75 |
+|---------|----:|-------:|----:|
+| Completed | {data['ttc_completed_p25_h']:.1f}h | {data['ttc_completed_median_h']:.1f}h | {data['ttc_completed_p75_h']:.1f}h ({data['ttc_completed_p75_h']/24:.1f}d) |
+| Duplicate | {data['ttc_duplicate_p25_h']:.1f}h | {data['ttc_duplicate_median_h']:.1f}h | {data['ttc_duplicate_p75_h']:.1f}h ({data['ttc_duplicate_p75_h']/24:.1f}d) |
+
+The completed P25 of just 30 minutes suggests many fixes land same-day, likely for regressions or
+clear-cut bugs. The tight IQR on duplicates (~80-91h) points to a scheduled bot sweep
+rather than manual triage.
+"""
+        ),
+        mo.ui.plotly(_fig),
+    ])
+    return (q11,)
+
+
+@app.cell
+def q12_summary(mo, data):
+    q12 = mo.md(
         f"""
 ## Summary: The lifecycle of an anthropics/claude-code issue
 
@@ -447,9 +683,13 @@ def q8_summary(mo, data):
 4. **95% of issues get at least one comment** — triage automation is strong
 5. **PR merge rate is ~26%** — most community PRs don't make it
 6. **Providing reproduction steps ~doubles** your chance of resolution
+7. **Regressions get priority** — 44% completion rate vs 32% for bugs
+8. **macOS dominates** issue volume at ~2.5x Windows/Linux
+9. **core, tui, tools** are the three noisiest component areas
+10. **Completed issues close in ~11 hours median** — duplicates take ~85h (batch triage cycle)
 """
     )
-    return (q8,)
+    return (q12,)
 
 
 if __name__ == "__main__":
