@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Python bindings for EternaFold RNA secondary structure prediction"
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
     { name = "Eterna Game", email = "eternagame@gmail.com" },
 ]
@@ -17,7 +17,6 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -32,6 +31,9 @@ Homepage = "https://github.com/eternagame/EternaFold"
 Repository = "https://github.com/eternagame/eternafold-python"
 Issues = "https://github.com/eternagame/eternafold-python/issues"
 
+[dependency-groups]
+dev = ["pytest>=8"]
+
 [tool.scikit-build]
 build.verbose = true
 wheel.packages = ["src/eternafold"]
@@ -41,6 +43,3 @@ CMAKE_BUILD_TYPE = "Release"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-
-[project.optional-dependencies]
-test = ["pytest>=7.0"]
