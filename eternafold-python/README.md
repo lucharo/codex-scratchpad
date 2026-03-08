@@ -41,6 +41,15 @@ from arnie.pfunc import pfunc
 Z = pfunc("GGGGGAAAAAACCCCC", package="eternafold")
 ```
 
+## Development
+
+Requires [uv](https://docs.astral.sh/uv/):
+
+```bash
+uv sync
+uv run pytest
+```
+
 ## License
 
-BSD-3-Clause (see vendor/eternafold/LICENSE)
+BSD-3-Clause (see [EternaFold LICENSE](https://github.com/eternagame/EternaFold/blob/master/LICENSE))
