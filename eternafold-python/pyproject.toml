@@ -35,7 +35,6 @@ Issues = "https://github.com/eternagame/eternafold-python/issues"
 [tool.scikit-build]
 build.verbose = true
 wheel.packages = ["src/eternafold"]
-sdist.include = ["vendor/eternafold/src/*", "vendor/eternafold/parameters/*"]
 
 [tool.scikit-build.cmake.define]
 CMAKE_BUILD_TYPE = "Release"

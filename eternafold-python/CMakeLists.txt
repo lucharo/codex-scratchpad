@@ -5,9 +5,18 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Upstream source directory
-set(ETERNAFOLD_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor/eternafold/src")
-set(ETERNAFOLD_PARAMS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor/eternafold/parameters")
+# --- Fetch EternaFold C++ source at configure time ---
+include(FetchContent)
+FetchContent_Declare(
+    eternafold_upstream
+    GIT_REPOSITORY https://github.com/eternagame/EternaFold.git
+    GIT_TAG        master
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(eternafold_upstream)
+
+set(ETERNAFOLD_SRC_DIR "${eternafold_upstream_SOURCE_DIR}/src")
+set(ETERNAFOLD_PARAMS_DIR "${eternafold_upstream_SOURCE_DIR}/parameters")
 
 # Compile flags matching upstream Makefile
 add_compile_definitions(EVIDENCE_SR EVIDENCE_PARS NDEBUG)
