@@ -2,6 +2,8 @@
 
 Python bindings for [EternaFold](https://github.com/eternagame/EternaFold), an RNA secondary structure prediction tool.
 
+Installs directly via `pip` / `uv` — no conda or pixi environment required. Works with downstream libraries like [Arnie](https://github.com/DasLab/arnie) without any modification to their source code.
+
 ## Installation
 
 ```bash
@@ -13,21 +15,7 @@ pip install eternafold
 ```python
 import eternafold
 
-# Predict MEA structure
-structure = eternafold.predict("GGGGGAAAAAACCCCC")
-print(structure)  # (((((......))))
-
-# Compute log partition function
-log_z = eternafold.pfunc("GGGGGAAAAAACCCCC")
-
-# Fold: predict structure and compute energy
-structure, energy = eternafold.fold("GGGGGAAAAAACCCCC")
-
-# Energy of a specific structure
-energy = eternafold.energy_of_structure("GGGGGAAAAAACCCCC", "(((((......)))))")
-
-# Base pair probability matrix
-bpp_matrix = eternafold.bpps("GGGGGAAAAAACCCCC")
+structure = eternafold.fold("GGGGGAAAAAACCCCC")
 ```
 
 ## Arnie Integration
@@ -36,7 +24,7 @@ bpp_matrix = eternafold.bpps("GGGGGAAAAAACCCCC")
 import eternafold
 eternafold.configure_arnie()
 
-# Now Arnie can find EternaFold automatically
+# Arnie finds EternaFold automatically — no arnie.rc changes needed
 from arnie.pfunc import pfunc
 Z = pfunc("GGGGGAAAAAACCCCC", package="eternafold")
 ```
