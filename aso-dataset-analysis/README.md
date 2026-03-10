@@ -43,6 +43,23 @@ uv run python generate_report.py
 | `generate_report.py` | Script to regenerate the HTML report |
 | `setup_data.sh` | Downloads both datasets |
 
+## View Interactive HTML Report or Simplified Action-Biased EDA Notebook
+
+| Resource | Link | Description |
+|----------|------|-------------|
+| **Interactive HTML Report** | [View Report](https://raw.githack.com/lucharo/codex-scratchpad/claude/aso-dataset-analysis-report-06su9/aso-dataset-analysis/aso_atlas_vs_asoptimizer_report.html) | Plotly charts, tables, key findings - no setup required |
+| **Marimo EDA Notebook** | [View Source](https://github.com/lucharo/codex-scratchpad/blob/claude/aso-dataset-analysis-report-06su9/aso-dataset-analysis/aso_compatibility_summary.py) | Action-biased analysis answering 5 key questions |
+| **Jupyter Version** | [View Notebook](https://github.com/lucharo/codex-scratchpad/blob/claude/aso-dataset-analysis-report-06su9/aso-dataset-analysis/aso_compatibility_summary.ipynb) | Same analysis in Jupyter format |
+
+To run locally:
+```bash
+# Clone and setup
+git clone https://github.com/lucharo/codex-scratchpad.git /tmp/aso-analysis
+cd /tmp/aso-analysis/aso-dataset-analysis
+./setup_data.sh              # downloads to ./aso_atlas and ./ASOptimizer
+uv sync && uv run marimo edit aso_compatibility_summary.py
+```
+
 ## Key Numbers
 
 | Metric | ASO Atlas | ASOptimizer | Overlap |
