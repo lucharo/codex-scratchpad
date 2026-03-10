@@ -14,7 +14,8 @@ Can [ASO Atlas](https://github.com/barneyhill/aso_atlas) (190K ASO records from 
 
 | File | Description |
 |------|-------------|
-| `aso_compatibility_summary.ipynb` | **Start here.** Concise 5-question analysis for decision-making |
+| `aso_compatibility_summary.py` | **Start here.** Marimo notebook - concise 5-question analysis |
+| `aso_compatibility_summary.ipynb` | Same analysis as Jupyter notebook |
 | `aso_atlas_vs_asoptimizer_report.html` | Interactive HTML report with Plotly charts |
 | `generate_report.py` | Script to regenerate the HTML report |
 | `setup_data.sh` | Downloads both datasets |
@@ -23,9 +24,15 @@ Can [ASO Atlas](https://github.com/barneyhill/aso_atlas) (190K ASO records from 
 
 ```bash
 cd aso-dataset-analysis
-./setup_data.sh          # clones both repos (~160MB)
-pip install pandas matplotlib
-jupyter notebook aso_compatibility_summary.ipynb
+./setup_data.sh              # clones both repos (~160MB)
+uv sync                      # install dependencies
+uv run marimo edit aso_compatibility_summary.py
+```
+
+Or with pip:
+```bash
+pip install pandas matplotlib marimo
+marimo edit aso_compatibility_summary.py
 ```
 
 ## Key Numbers

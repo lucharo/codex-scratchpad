@@ -4,3 +4,4 @@
 # Cloned external repositories (run aso-dataset-analysis/setup_data.sh)
 aso-dataset-analysis/ASOptimizer/
 aso-dataset-analysis/aso_atlas/
+.venv/
