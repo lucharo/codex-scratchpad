@@ -1,5 +1,6 @@
 # C2C MCP Server Infrastructure
 .c2c/
-# Cloned external repositories (run ./setup_data.sh to obtain)
-ASOptimizer/
-aso_atlas/
+
+# Cloned external repositories (run aso-dataset-analysis/setup_data.sh)
+aso-dataset-analysis/ASOptimizer/
+aso-dataset-analysis/aso_atlas/

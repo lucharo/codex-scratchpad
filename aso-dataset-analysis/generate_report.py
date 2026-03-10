@@ -2,7 +2,10 @@
 """Generate comprehensive ASO Atlas vs ASOptimizer comparison report."""
 
 import sys
-sys.path.insert(0, '/home/user/codex-scratchpad/aso_atlas')
+from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPT_DIR / 'aso_atlas'))
 
 import pandas as pd
 import numpy as np
@@ -12,10 +15,10 @@ import re
 
 # Load datasets
 print("Loading ASO Atlas...")
-atlas_df = pd.read_pickle('/home/user/codex-scratchpad/aso_atlas/data/aso_atlas.pkl')
+atlas_df = pd.read_pickle(SCRIPT_DIR / 'aso_atlas' / 'data' / 'aso_atlas.pkl')
 
 print("Loading ASOptimizer...")
-asopt_df = pd.read_csv('/home/user/codex-scratchpad/ASOptimizer/dataset/experiments_with_smiles.csv', low_memory=False)
+asopt_df = pd.read_csv(SCRIPT_DIR / 'ASOptimizer' / 'dataset' / 'experiments_with_smiles.csv', low_memory=False)
 
 # Add sequence length to atlas
 atlas_df['seq_len'] = atlas_df['aso_sequence_5_to_3'].str.len()
@@ -1025,7 +1028,7 @@ html_content = f'''<!DOCTYPE html>
 '''
 
 # Write the report
-output_path = '/home/user/codex-scratchpad/aso_atlas_vs_asoptimizer_report.html'
+output_path = str(SCRIPT_DIR / 'aso_atlas_vs_asoptimizer_report.html')
 with open(output_path, 'w') as f:
     f.write(html_content)
 
