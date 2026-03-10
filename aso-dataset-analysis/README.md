@@ -2,6 +2,8 @@
 
 Can [ASO Atlas](https://github.com/barneyhill/aso_atlas) (190K ASO records from USPTO patents) be used to expand [ASOptimizer](https://github.com/Spidercores/ASOptimizer)'s training data (37K records)?
 
+**[View Interactive Report](https://raw.githack.com/lucharo/codex-scratchpad/claude/aso-dataset-analysis-report-06su9/aso-dataset-analysis/aso_atlas_vs_asoptimizer_report.html)**
+
 ## Quick Answer
 
 **Yes, with caveats:**
@@ -9,6 +11,27 @@ Can [ASO Atlas](https://github.com/barneyhill/aso_atlas) (190K ASO records from 
 - ~19K records are true duplicates (identical efficacy values)
 - ASO Atlas adds **151K new sequences** but lacks SMILES molecular structures
 - SMILES can be generated from ASO Atlas's position-level modification data using RDKit
+
+## Usage
+
+```bash
+# Quick start - run everything as a pipeline
+cd aso-dataset-analysis
+./setup_data.sh              # download datasets to ./aso_atlas and ./ASOptimizer
+uv sync                      # install dependencies
+uv run marimo run aso_compatibility_summary.py   # run as script (no UI)
+uv run marimo edit aso_compatibility_summary.py  # interactive notebook
+```
+
+Or download data to /tmp:
+```bash
+DATA_DIR=/tmp ./setup_data.sh
+```
+
+Regenerate the HTML report:
+```bash
+uv run python generate_report.py
+```
 
 ## Files
 
@@ -19,21 +42,6 @@ Can [ASO Atlas](https://github.com/barneyhill/aso_atlas) (190K ASO records from 
 | `aso_atlas_vs_asoptimizer_report.html` | Interactive HTML report with Plotly charts |
 | `generate_report.py` | Script to regenerate the HTML report |
 | `setup_data.sh` | Downloads both datasets |
-
-## Setup
-
-```bash
-cd aso-dataset-analysis
-./setup_data.sh              # clones both repos (~160MB)
-uv sync                      # install dependencies
-uv run marimo edit aso_compatibility_summary.py
-```
-
-Or with pip:
-```bash
-pip install pandas matplotlib marimo
-marimo edit aso_compatibility_summary.py
-```
 
 ## Key Numbers
 
